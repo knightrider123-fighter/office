@@ -103,3 +103,38 @@ SessionContext.setSessionContext(sessionVO);
 performServiceAudit(svcVo);
 
 FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+
+
+JsonObject root = JsonParser.parseString(strReq).getAsJsonObject();
+
+		for (String key : root.keySet()) {
+			JsonElement element = root.get(key);
+
+//			if (element.isJsonObject()) {
+//				JsonObject obj = element.getAsJsonObject();
+//				if (obj.has("base64Str")) {
+//					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+//							"Base64 string found and removed for security.");
+//
+//					String jsonElement = obj.get("base64").getAsString();
+//
+//					if (jsonElement == null || jsonElement.isEmpty()) {
+//						obj.addProperty("base64Str", "Empty_Document_Base64_String");
+//					} else {
+//						obj.addProperty("base64Str", "...");
+//
+//					}
+//				}
+//			}
+			if(key.equals("base64")) {
+				if()
+			}
+		}  
+
+{
+    "base64": "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwH/////////EU2bdKpNu4tTq4QVSalmU6yBL027i1OrhBZUrmtTrIFYTbuLU6uEHFO7a1OsgcUVSalmpESJiEDl7CAAAAAAKtexgw9CQE2AhkNocm9tZVdBh",
+    "branchCode": "00437",
+    "channelID": "Y2EDSRK",
+    "cifNumber": "********2431",
+    "docTitle": "00000085002372431_VKYC.webm"
+}
