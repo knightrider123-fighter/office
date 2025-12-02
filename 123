@@ -1,1 +1,105 @@
 
+String thisMethod = EdmsUploadConstants.PERFORM_AUDIT;
+FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+
+Gson gson = new Gson();
+Encoder encoder = Base64.getEncoder();
+ServiceAuditVO svcVo = new ServiceAuditVO();
+
+/**
+ * Convert bean to JSON and remove base64Str values
+ */
+String strReq = gson.toJson(bean);
+
+JsonObject root = JsonParser.parseString(strReq).getAsJsonObject();
+
+// Remove base64Str from nested objects
+for (String key : root.keySet()) {
+    JsonElement element = root.get(key);
+
+    if (element.isJsonObject()) {
+        JsonObject obj = element.getAsJsonObject();
+        if (obj.has("base64Str")) {
+            FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+                    "Base64 string found and removed for security.");
+            obj.addProperty("base64Str", "");
+        }
+    }
+}
+
+String updatedReqJson = gson.toJson(root);
+FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, updatedReqJson);
+
+
+/**
+ * Handle docUploadRes response
+ */
+String strResp = "";
+String responseCode = "";
+String responseMsg = "";
+
+if (docUploadRes != null) {
+    FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+            EdmsUploadConstants.DOC_UPLOAD_RESPONSE_IS_NOT_NULL);
+
+    strResp = gson.toJson(docUploadRes);
+    responseCode = docUploadRes.getResponseCode();
+    responseMsg = docUploadRes.getResponseMsg();
+}
+
+
+/**
+ * Capture session information
+ */
+SessionVO sessionVO = new SessionVO();
+
+ServletRequestAttributes reqAttr =
+        (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+
+if (reqAttr != null) {
+    HttpServletRequest req = reqAttr.getRequest();
+    sessionVO.setDataType(req.getHeader(Constants.DATATYPE));
+}
+
+
+// Generate fresh Transaction ID
+String transactionId = IDGenerator.generateTransactionId(22);
+svcVo.setTransId(transactionId);
+sessionVO.setTransactionId(transactionId);
+
+
+/**
+ * Prepare ServiceAuditVO
+ */
+svcVo.setSessnTknId(sessionVO.getSessionTokenID());
+svcVo.setTrnsSts("-1");
+svcVo.setErrCd(responseCode);
+svcVo.setErrMsg(responseMsg);
+svcVo.setUsrId(sessionVO.getUserId());
+svcVo.setSrvcRqst(encoder.encodeToString(updatedReqJson.getBytes())); // encoded request
+svcVo.setSrvcRspn(encoder.encodeToString(strResp.getBytes()));        // encoded response
+svcVo.setServiceId(Constants.EDMSUPLOADDOC);
+svcVo.setSystemName(EdmsUploadConstants.EDMS);
+svcVo.setApiUrl(docUploadURL);
+svcVo.setRqstIdSent(IDGenerator.generateTransactionId(22));
+svcVo.setRqstIdReceived(IDGenerator.generateTransactionId(22));
+svcVo.setCrtdBy(Constants.SYSTEM);
+svcVo.setCrtdOn(new Timestamp(System.currentTimeMillis()));
+svcVo.setStrtTime(null);
+svcVo.setEndTime(null);
+
+FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, svcVo.toString());
+
+/**
+ * Reset SessionContext user info
+ */
+sessionVO.setUserId(null);
+SessionContext.setSessionContext(sessionVO);
+
+
+/**
+ * Perform Audit
+ */
+performServiceAudit(svcVo);
+
+FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
