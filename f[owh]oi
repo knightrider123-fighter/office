@@ -1,1 +1,76 @@
-hdf[oiwsdfohqifdd
+public void performAudit(RequestBean bean, EDMSResponse docUploadRes, String docUploadURL) {
+		String thisMethod = EdmsUploadConstants.PERFORM_AUDIT;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		ServiceAuditVO svcVo = new ServiceAuditVO();
+		Gson gson = new Gson();
+		String strReq = gson.toJson(bean);
+
+
+
+		JsonObject root = JsonParser.parseString(strReq).getAsJsonObject();
+
+	
+		for (String key : root.keySet()) {
+			
+			JsonElement element = root.get(key);
+			// If value is an object and it contains base64Str, update it
+			if (element.isJsonObject()) {
+				JsonObject obj = element.getAsJsonObject();
+				if (obj.has("base64Str")) {
+					System.out.println("Base64 find...");
+					obj.addProperty("base64Str", "");
+				}
+			}
+		}
+
+		String updated = new Gson().toJson(root);
+		System.out.println(updated);
+
+		String strResp = EdmsUploadConstants.EMPTY;
+		String responseCode = EdmsUploadConstants.EMPTY;
+		String responseMsg = EdmsUploadConstants.EMPTY;
+		Encoder encoder = Base64.getEncoder();
+		if (null != docUploadRes) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.DOC_UPLOAD_RESPONSE_IS_NOT_NULL);
+			strResp = gson.toJson(docUploadRes);
+			responseCode = docUploadRes.getResponseCode();
+			responseMsg = docUploadRes.getResponseMsg();
+		}
+		SessionVO sessionVO = new SessionVO();
+		ServletRequestAttributes reqAtt = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+		if (null != reqAtt) {
+			HttpServletRequest req = reqAtt.getRequest();
+
+			sessionVO.setDataType(req.getHeader(Constants.DATATYPE));
+		}
+		System.out.println(strReq);
+		System.out.println(SessionContext.getTransactionId());
+		svcVo.setTransId("72390842707309478");
+//		String trsnId=IDGenerator.generateTransactionId(22);
+//		System.out.println(trsnId);
+//		svcVo.setTransId(trsnId);
+//		sessionVO.setTransactionId(trsnId);
+
+		svcVo.setSessnTknId(sessionVO.getSessionTokenID());
+		svcVo.setTrnsSts("-1");
+		svcVo.setErrCd(responseCode);
+		svcVo.setErrMsg(responseMsg);
+		svcVo.setUsrId(sessionVO.getUserId());
+		svcVo.setSrvcRqst(encoder.encodeToString(strReq.getBytes()));
+		svcVo.setSrvcRspn(encoder.encodeToString(strResp.getBytes()));
+		svcVo.setServiceId(Constants.EDMSUPLOADDOC);
+		svcVo.setSystemName(EdmsUploadConstants.EDMS);
+		svcVo.setApiUrl(docUploadURL);
+		svcVo.setRqstIdSent(IDGenerator.generateTransactionId(22));
+		svcVo.setRqstIdReceived(IDGenerator.generateTransactionId(22));
+		svcVo.setCrtdBy(Constants.SYSTEM);
+		svcVo.setCrtdOn(new Timestamp(System.currentTimeMillis()));
+		svcVo.setStrtTime(null);
+		svcVo.setEndTime(null);
+		System.out.println(svcVo.toString());
+		sessionVO.setUserId(null);
+		SessionContext.setSessionContext(sessionVO);
+		performServiceAudit(svcVo);
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+	}
