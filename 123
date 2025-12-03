@@ -138,3 +138,28 @@ JsonObject root = JsonParser.parseString(strReq).getAsJsonObject();
     "cifNumber": "********2431",
     "docTitle": "00000085002372431_VKYC.webm"
 }
+JsonObject root = JsonParser.parseString(strReq).getAsJsonObject();
+
+for (String key : root.keySet()) {
+
+    // Only process the field with name "base64"
+    if (key.equals("base64")) {
+
+        JsonElement element = root.get(key);
+
+        // Convert to String safely
+        String base64Value = element.isJsonNull() ? "" : element.getAsString();
+
+        if (base64Value == null || base64Value.trim().isEmpty()) {
+
+            // If base64 is empty → write placeholder
+            root.addProperty("base64", "Empty_Document_Base64_String");
+
+        } else {
+
+            // If base64 is present → replace with masked info
+            root.addProperty("base64", "...");
+
+        }
+    }
+}
