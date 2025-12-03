@@ -81,3 +81,118 @@ public void performAudit(String leadId, Object bean, EDMSResponse docUploadRes, 
 
 		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
 	}
+
+public void performAudit(String leadId, Object bean, EDMSResponse docUploadRes,
+                         String docUploadURL, String serviceId) {
+
+    String thisMethod = EdmsUploadConstants.PERFORM_AUDIT;
+    FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+
+    Gson gson = new Gson();
+    Encoder encoder = Base64.getEncoder();
+    ServiceAuditVO svcVo = new ServiceAuditVO();
+
+    /* --------------------- REQUEST HANDLING --------------------- */
+
+    // Convert bean → JSON
+    String strReq = (bean != null) ? gson.toJson(bean) : "";
+
+    // Parse safely to JsonObject
+    JsonObject reqJsonObj = safeJsonParse(strReq);
+
+    // Mask request
+    Map<Object, Object> maskedRequestMap = (reqJsonObj != null)
+            ? loggingAspect.maskInstanceOfMap(reqJsonObj)
+            : new HashMap<>();
+
+    String updatedReqJson = gson.toJson(maskedRequestMap);
+    FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, updatedReqJson);
+
+
+    /* --------------------- RESPONSE HANDLING --------------------- */
+
+    String responseCode = "";
+    String responseMsg = "";
+    String strResp = "";
+
+    if (docUploadRes != null) {
+        FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+                EdmsUploadConstants.DOC_UPLOAD_RESPONSE_IS_NOT_NULL);
+
+        strResp = gson.toJson(docUploadRes);
+        responseCode = docUploadRes.getResponseCode();
+        responseMsg = docUploadRes.getResponseMsg();
+    }
+
+    // Parse safely to JsonObject
+    JsonObject respJsonObj = safeJsonParse(strResp);
+
+    // Mask response
+    Map<Object, Object> maskedResponseMap = (respJsonObj != null)
+            ? loggingAspect.maskInstanceOfMap(respJsonObj)
+            : new HashMap<>();
+
+    String updatedResJson = gson.toJson(maskedResponseMap);
+    FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, updatedResJson);
+
+
+    /* --------------------- SESSION HANDLING --------------------- */
+
+    SessionVO sessionVO = new SessionVO();
+
+    ServletRequestAttributes reqAttr =
+            (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+
+    if (reqAttr != null) {
+        HttpServletRequest req = reqAttr.getRequest();
+        sessionVO.setDataType(req.getHeader(Constants.DATATYPE));
+    }
+
+
+    /* --------------------- BUILD AUDIT VO --------------------- */
+
+    String transactionId = IDGenerator.generateTransactionId(22);
+    svcVo.setTransId(transactionId);
+    sessionVO.setTransactionId(transactionId);
+
+    svcVo.setSessnTknId(sessionVO.getSessionTokenID());
+    svcVo.setTrnsSts("-1");
+    svcVo.setErrCd(responseCode);
+    svcVo.setErrMsg(responseMsg);
+    svcVo.setUsrId(sessionVO.getUserId());
+
+    svcVo.setSrvcRqst(encoder.encodeToString(updatedReqJson.getBytes()));
+    svcVo.setSrvcRspn(encoder.encodeToString(updatedResJson.getBytes()));
+
+    svcVo.setServiceId(Constants.EDMSUPLOADDOC);
+    svcVo.setSystemName(EdmsUploadConstants.EDMS);
+    svcVo.setApiUrl(docUploadURL);
+    svcVo.setRqstIdSent(leadId);
+    svcVo.setRqstIdReceived(leadId);
+    svcVo.setCrtdBy(Constants.SYSTEM);
+    svcVo.setCrtdOn(new Timestamp(System.currentTimeMillis()));
+    svcVo.setStrtTime(null);
+    svcVo.setEndTime(null);
+
+    FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, svcVo.toString());
+
+    // Reset user details in session
+    sessionVO.setUserId(null);
+    SessionContext.setSessionContext(sessionVO);
+
+    performServiceAudit(svcVo);
+
+    FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+}
+
+private JsonObject safeJsonParse(String json) {
+    try {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        JsonElement element = JsonParser.parseString(json);
+        return element.isJsonObject() ? element.getAsJsonObject() : null;
+    } catch (Exception e) {
+        return null; // return null if invalid JSON
+    }
+}
