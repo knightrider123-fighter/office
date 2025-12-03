@@ -1,3 +1,4 @@
+
 /**
 	 * Method Name: performVideoAudit Description : perform video audit
 	 * 
@@ -148,3 +149,101 @@
 			return null; // return null if invalid JSON
 		}
 	}
+
+-------
+/**
+ * Method Name: performVideoAudit
+ * Description: Perform video audit (same structure as performAudit)
+ */
+public void performVideoAudit(String refNo, ReqBean bean, EDMSResponse vidUploadRes,
+                              String docUploadURL, String serviceId) {
+
+    String thisMethod = EdmsUploadConstants.PERFORM_VIDEO_AUDIT;
+    FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+
+    Gson gson = new Gson();
+    Encoder encoder = Base64.getEncoder();
+    ServiceAuditVO svcVo = new ServiceAuditVO();
+
+    /* ----------------- REQUEST PARSING + MASKING ------------------ */
+    String strReq = (bean != null) ? gson.toJson(bean) : "";
+
+    JsonObject reqJsonObj = safeJsonParse(strReq);
+
+    Map<Object, Object> maskedRequestMap =
+            (reqJsonObj != null) ? loggingAspect.maskInstanceOfMap(reqJsonObj) : new HashMap<>();
+
+    String updatedReqJson = gson.toJson(maskedRequestMap);
+    FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, updatedReqJson);
+
+    /* ----------------- RESPONSE PARSING + MASKING ------------------ */
+    String strResp = "";
+    String responseCode = "";
+    String responseMsg = "";
+
+    if (vidUploadRes != null) {
+        FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+                EdmsUploadConstants.VIDEO_UPLOAD_RESPONSE_NOT_NULL);
+
+        strResp = gson.toJson(vidUploadRes);
+        responseCode = vidUploadRes.getResponseCode();
+        responseMsg = vidUploadRes.getResponseMsg();
+    }
+
+    JsonObject respJsonObj = safeJsonParse(strResp);
+
+    Map<Object, Object> maskedResponseMap =
+            (respJsonObj != null) ? loggingAspect.maskInstanceOfMap(respJsonObj) : new HashMap<>();
+
+    String updatedResJson = gson.toJson(maskedResponseMap);
+    FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, updatedResJson);
+
+    /* ----------------- SESSION DETAILS ------------------ */
+    SessionVO sessionVO = new SessionVO();
+
+    ServletRequestAttributes reqAttr = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+    if (reqAttr != null) {
+        HttpServletRequest req = reqAttr.getRequest();
+        sessionVO.setDataType(req.getHeader(Constants.DATATYPE));
+    }
+
+    /* ----------------- TRANSACTION ID ------------------ */
+    String transactionId = IDGenerator.generateTransactionId(22);
+    svcVo.setTransId(transactionId);
+    sessionVO.setTransactionId(transactionId);
+
+    /* ----------------- POPULATE AUDIT VO ------------------ */
+    svcVo.setSessnTknId(sessionVO.getSessionTokenID());
+    svcVo.setTrnsSts("-1");
+    svcVo.setErrCd(responseCode);
+    svcVo.setErrMsg(responseMsg);
+    svcVo.setUsrId(sessionVO.getUserId());
+
+    svcVo.setSrvcRqst(encoder.encodeToString(updatedReqJson.getBytes()));
+    svcVo.setSrvcRspn(encoder.encodeToString(updatedResJson.getBytes()));
+
+    svcVo.setServiceId(serviceId);
+    svcVo.setSystemName(EdmsUploadConstants.EDMS);
+    svcVo.setApiUrl(docUploadURL);
+    svcVo.setRqstIdSent(refNo);
+    svcVo.setRqstIdReceived(refNo);
+    svcVo.setCrtdBy(Constants.SYSTEM);
+    svcVo.setCrtdOn(new Timestamp(System.currentTimeMillis()));
+    svcVo.setStrtTime(null);
+    svcVo.setEndTime(null);
+
+    FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, svcVo.toString());
+
+    /* ----------------- RESET SESSION ------------------ */
+    sessionVO.setUserId(null);
+    SessionContext.setSessionContext(sessionVO);
+
+    /* ----------------- SAVE AUDIT ------------------ */
+    performServiceAudit(svcVo);
+
+    FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+}
+
+
+
+
