@@ -1,0 +1,150 @@
+/**
+	 * Method Name: performVideoAudit Description : perform video audit
+	 * 
+	 * @param bean
+	 * @param docUploadRes
+	 * @param docUploadURL
+	 */
+	public void performVideoAudit(String refNo, ReqBean bean, EDMSResponse vidUploadRes, String docUploadURL,
+			String serviceId) {
+		String thisMethod = EdmsUploadConstants.PERFORM_VIDEO_AUDIT;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		ServiceAuditVO svcVo = new ServiceAuditVO();
+		String strReq = Base64.getEncoder().encodeToString(bean.toString().getBytes(StandardCharsets.UTF_8));
+		String strResp = EdmsUploadConstants.EMPTY;
+		String responseCode = EdmsUploadConstants.EMPTY;
+		String responseMsg = EdmsUploadConstants.EMPTY;
+		if (null != vidUploadRes) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.VIDEO_UPLOAD_RESPONSE_NOT_NULL);
+			strResp = Base64.getEncoder().encodeToString(vidUploadRes.toString().getBytes(StandardCharsets.UTF_8));
+			responseCode = vidUploadRes.getResponseCode();
+			responseMsg = vidUploadRes.getResponseMsg();
+		}
+		SessionVO sessionVO = new SessionVO();
+		ServletRequestAttributes reqAtt = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+		if (null != reqAtt) {
+			HttpServletRequest req = reqAtt.getRequest();
+			sessionVO.setTransactionId(req.getHeader(Constants.TRANSACTIONID));
+			sessionVO.setDataType(req.getHeader(Constants.DATATYPE));
+		}
+
+		svcVo.setTransId(sessionVO.getTransactionId());
+		svcVo.setSessnTknId(sessionVO.getSessionTokenID());
+		svcVo.setTrnsSts(null);
+		svcVo.setErrCd(responseCode);
+		svcVo.setErrMsg(responseMsg);
+		svcVo.setUsrId(sessionVO.getUserId());
+		svcVo.setSrvcRqst(strReq);
+		svcVo.setSrvcRspn(strResp);
+		svcVo.setServiceId(serviceId);
+		svcVo.setSystemName(EdmsUploadConstants.EDMS);
+		svcVo.setApiUrl(docUploadURL);
+		svcVo.setRqstIdSent(null);
+		svcVo.setRqstIdReceived(null);
+		svcVo.setCrtdBy(Constants.SYSTEM);
+		svcVo.setCrtdOn(new Timestamp(System.currentTimeMillis()));
+		svcVo.setStrtTime(null);
+		svcVo.setEndTime(null);
+		sessionVO.setUserId(null);
+		SessionContext.setSessionContext(sessionVO);
+		performServiceAudit(svcVo);
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+	}
+	 */
+	public void performAudit(String leadId, Object bean, EDMSResponse docUploadRes, String docUploadURL,
+			String serviceId) {
+
+		String thisMethod = EdmsUploadConstants.PERFORM_AUDIT;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+
+		Gson gson = new Gson();
+		Encoder encoder = Base64.getEncoder();
+		ServiceAuditVO svcVo = new ServiceAuditVO();
+
+		String strReq = (bean != null) ? gson.toJson(bean) : "";
+
+		JsonObject reqJsonObj = safeJsonParse(strReq);
+
+		Map<Object, Object> maskedRequestMap = (reqJsonObj != null) ? loggingAspect.maskInstanceOfMap(reqJsonObj)
+				: new HashMap<>();
+
+		String updatedReqJson = gson.toJson(maskedRequestMap);
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, updatedReqJson);
+
+		String responseCode = "";
+		String responseMsg = "";
+		String strResp = "";
+
+		if (docUploadRes != null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.DOC_UPLOAD_RESPONSE_IS_NOT_NULL);
+
+			strResp = gson.toJson(docUploadRes);
+			responseCode = docUploadRes.getResponseCode();
+			responseMsg = docUploadRes.getResponseMsg();
+		}
+
+		JsonObject respJsonObj = safeJsonParse(strResp);
+
+		Map<Object, Object> maskedResponseMap = (respJsonObj != null) ? loggingAspect.maskInstanceOfMap(respJsonObj)
+				: new HashMap<>();
+
+		String updatedResJson = gson.toJson(maskedResponseMap);
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, updatedResJson);
+
+		SessionVO sessionVO = new SessionVO();
+
+		ServletRequestAttributes reqAttr = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+
+		if (reqAttr != null) {
+			HttpServletRequest req = reqAttr.getRequest();
+			sessionVO.setDataType(req.getHeader(Constants.DATATYPE));
+		}
+
+		String transactionId = IDGenerator.generateTransactionId(22);
+		svcVo.setTransId(transactionId);
+		sessionVO.setTransactionId(transactionId);
+
+		svcVo.setSessnTknId(sessionVO.getSessionTokenID());
+		svcVo.setTrnsSts("-1");
+		svcVo.setErrCd(responseCode);
+		svcVo.setErrMsg(responseMsg);
+		svcVo.setUsrId(sessionVO.getUserId());
+		System.out.println(updatedReqJson);
+		System.out.println(updatedResJson);
+		svcVo.setSrvcRqst(encoder.encodeToString(updatedReqJson.getBytes()));
+		svcVo.setSrvcRspn(encoder.encodeToString(updatedResJson.getBytes()));
+
+		svcVo.setServiceId(serviceId);
+		svcVo.setSystemName(EdmsUploadConstants.EDMS);
+		svcVo.setApiUrl(docUploadURL);
+		svcVo.setRqstIdSent(leadId);
+		svcVo.setRqstIdReceived(leadId);
+		svcVo.setCrtdBy(Constants.SYSTEM);
+		svcVo.setCrtdOn(new Timestamp(System.currentTimeMillis()));
+		svcVo.setStrtTime(null);
+		svcVo.setEndTime(null);
+
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, svcVo.toString());
+
+// Reset user details in session
+		sessionVO.setUserId(null);
+		SessionContext.setSessionContext(sessionVO);
+
+		performServiceAudit(svcVo);
+
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+	}
+
+	private JsonObject safeJsonParse(String json) {
+		try {
+			if (json == null || json.isBlank()) {
+				return null;
+			}
+			JsonElement element = JsonParser.parseString(json);
+			return element.isJsonObject() ? element.getAsJsonObject() : null;
+		} catch (Exception e) {
+			return null; // return null if invalid JSON
+		}
+	}
