@@ -1,0 +1,103 @@
+public void ntbTriggerBatchJourney() {
+		String thisMethod = EdmsUploadConstants.JOURNEY_TYPE;
+		FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+				EdmsUploadConstants.METHOD_STARTED);
+		int segmentSize = Integer.parseInt((String) GlobalConfigPropertiesReader.getInstance()
+				.getPropertyById(EdmsUploadConstants.EDMS_SEGEMENT_SIZE));
+		int threadSize = Integer.parseInt((String) GlobalConfigPropertiesReader.getInstance()
+				.getPropertyById(EdmsUploadConstants.EDMS_THREAD_SIZE));
+
+		FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+				EdmsUploadConstants.NTB_REQUEST_FOR_SA);
+		List<CustmrOnbrdngTrigger> custmrOnbrdngTrigger = custOnbrdingTriggerRepo.findByStatus();
+		if (custmrOnbrdngTrigger.isEmpty()) {
+			FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.LIST_OF_CUSTOMER_ONBRDING_IS_EMPTY);
+		} else {
+			FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.LIST_OF_CUSTOMER_ONBRDING_IS_NOT_EMPTY);
+
+			List<List<CustmrOnbrdngTrigger>> segmentList = ListSegmenter.segmentList(custmrOnbrdngTrigger, segmentSize);
+			ExecutorService customExecutor = Executors.newFixedThreadPool(threadSize);
+			threadsRunner(segmentSize, segmentList, customExecutor);
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+	}
+
+	/**
+	 * @param segmentSize
+	 * @param segmentList
+	 * @param customExecutor
+	 */
+	public void threadsRunner(int segmentSize, List<List<CustmrOnbrdngTrigger>> segmentList,
+			ExecutorService customExecutor) {
+		String thisMethod = "threadsRunner";
+		try {
+			List<CompletableFuture<String>> futures = IntStream.range(0, segmentList.size()).mapToObj(i -> {
+				FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+						"Batch from " + i + 1 + " - " + (i + 1) * segmentSize);
+				FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+						"Starting ref_no" + segmentList.get(i).get(0).getRef_no());
+				FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+						"Ending ref_no" + segmentList.get(i).get(segmentList.get(i).size() - 1).getRef_no());
+				return CompletableFuture.supplyAsync(() -> {
+					long threadName = Thread.currentThread().threadId();
+					FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+							"Executing task " + i + " on thread: " + threadName);
+					segmentProcess(segmentList.get(i));
+					FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+							"Batch " + ((((i + 1) * segmentSize) - segmentSize) + 1) + " - " + ((i + 1) * segmentSize)
+									+ " completed successfully and batch size was " + segmentSize + " on thread: "
+									+ threadName);
+					return "Result of task " + i;
+				}, customExecutor);
+			}).toList();
+
+			CompletableFuture<Void> allOf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+
+			CompletableFuture<List<String>> allResults = allOf
+					.thenApplyAsync(v -> futures.stream().map(CompletableFuture::join).toList(), customExecutor);
+
+			List<String> results11 = allResults.get();
+			FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+					"\nFinal results received: " + results11.size() + " results.");
+		} catch (InterruptedException | ExecutionException e) {
+			FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.CUSTOMER_ONBRDING_AND_EDMS_UPLOAD_DOC_IS_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, CallNtbEtbRequest.class.getSimpleName(), thisMethod,
+					EdmsUploadConstants.CIPHER_IS_IN_AN_ILLEGAL_STATE_FOR_USER + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		} finally {
+			customExecutor.shutdown();
+			try {
+				if (!customExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+					customExecutor.shutdownNow();
+				}
+			} catch (InterruptedException e) {
+				customExecutor.shutdownNow();
+				Thread.currentThread().interrupt();
+			}
+		}
+	}
+
+	/**
+	 * @param list
+	 */
+	public void segmentProcess(List<CustmrOnbrdngTrigger> list) {
+		String thisMethod = "newMethod";
+		FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+				EdmsUploadConstants.METHOD_STARTED);
+		for (CustmrOnbrdngTrigger cot : list) {
+			boolean reqFlag = edmsReqRepo.existsById(cot.getRef_no());
+			boolean retryFlag = edmsRetryRepo.existsById(cot.getRef_no());
+			if (!reqFlag && !retryFlag) {
+				String status = ntbTrigger.triggerEDMSSvc(cot.getRef_no());
+				if (status.equals("Success")) {
+					edmsErrorRepo.deleteByRefNo(cot.getRef_no());
+				}
+			}
+		}
+
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+	}
+}
