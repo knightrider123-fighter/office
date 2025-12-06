@@ -1,0 +1,27 @@
+package com.sbi.yono.document.savingsaccount.edms.phototrigger;
+
+
+
+import java.util.Optional;
+
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.NtbErrorRepository;
+import com.sbi.yono.document.savingsaccount.edms.entity.NTBTriggerErrorEntity;
+
+public class PhotoRetryTrigger {
+	private NtbErrorRepository ntbErrorRepository;
+	
+	public PhotoRetryTrigger(NtbErrorRepository ntbErrorRepository) {
+		this.ntbErrorRepository=ntbErrorRepository;
+		
+	}
+	
+	public void photoTriggerSvc(String refNo) {
+		Optional<NTBTriggerErrorEntity> errorOptional=ntbErrorRepository.findById(refNo);
+		if(errorOptional.isPresent()) {
+			System.out.println(errorOptional.get().getErrorDescription());
+		}
+		
+	}
+
+
+}
