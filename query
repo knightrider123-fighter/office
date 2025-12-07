@@ -18,3 +18,12 @@ String sql = new StringBuilder()
     .append("WHERE e.error_code = '1001' ")
     .append("  AND LOWER(e.error_description) LIKE '%photo%' ")
     .toString();
+SELECT 
+    e.ref_no,
+    e.error_description,
+    c.applcnt_dtls->'lead'->'personalDtls'->>'photo' AS photoBase64
+FROM yono_dcmnt.edms_error e
+JOIN yono_cstmr.cstmr_onbrdng c 
+    ON e.ref_no = c.ref_no
+WHERE e.error_code = '1001'
+  AND LOWER(e.error_description) LIKE '%photo%';
