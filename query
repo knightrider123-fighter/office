@@ -9,4 +9,12 @@ SELECT ref_no, cstmr_type, strt_dt, last_updtd_dt, status, mbl_no, frst_nm, mddl
 	String sql = new StringBuilder()
 	            .append("SELECT ref_no, applcnt_dtls->'lead'->'personalDtls'->>'photo' as photo, response_status FROM yono_cstmr.cstmr_onbrdng where response_status=333 ")
 	            .toString();
-
+String sql = new StringBuilder()
+    .append("SELECT e.ref_no, ")
+    .append("       e.error_description, ")
+    .append("       c.applcnt_dtls->'lead'->'personalDtls'->>'photo' AS photoBase64 ")
+    .append("FROM yono_dcmnt.edms_error e ")
+    .append("JOIN yono_cstmr.cstmr_onbrdng c ON e.ref_no = c.ref_no ")
+    .append("WHERE e.error_code = '1001' ")
+    .append("  AND LOWER(e.error_description) LIKE '%photo%' ")
+    .toString();
