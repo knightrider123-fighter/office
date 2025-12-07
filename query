@@ -5,3 +5,8 @@ SELECT ref_no, cstmr_type, strt_dt, last_updtd_dt, status, mbl_no, frst_nm, mddl
 	FROM yono_dcmnt.edms_error;
 	
 		SELECT applcnt_dtls->'lead'->'personalDtls'->>'photo' AS photo FROM yono_cstmr.cstmr_onbrdng WHERE ref_no='SBIY22426812090579VOjXrMH'
+
+	String sql = new StringBuilder()
+	            .append("SELECT ref_no, applcnt_dtls->'lead'->'personalDtls'->>'photo' as photo, response_status FROM yono_cstmr.cstmr_onbrdng where response_status=333 ")
+	            .toString();
+
