@@ -1,0 +1,48 @@
+
+	void callPhotoTrigger(PhotoRetryDto photoRetryDto) {
+		String refNo = photoRetryDto.getRefNo();
+		if (!ifPhotoDocsPresent(photoRetryDto.getRefNo()) || !ifAOFDocsPresent(photoRetryDto.getRefNo())) {
+			String baseSixtyFour = photoRetryDto.getBaseSixtyFour();
+			System.out.println(photoRetryDto.getRefNo());
+			System.out.println("Get base64  " + photoRetryDto.getBaseSixtyFour());
+			if (!ifPhotoDocsPresent(photoRetryDto.getRefNo())) {
+				photoBase64Saving(refNo, baseSixtyFour);
+			}
+
+			Optional<CustomerOnboarding> customerOnbordingOptional = customerOnboardingRepository.findById(refNo);
+
+			Map<String, Object> fetchDataMap = new HashMap<>();
+			Map<String, Object> aofResponse = new HashMap<>();
+
+			SessionVO sessionVo = new SessionVO();
+			String txnId = IDGenerator.generateTransactionId(Integer.parseInt("22"));
+			String sessionTokenId = IDGenerator.generateTransactionId(Integer.parseInt("22"));
+			sessionVo.setTransactionId(txnId);
+			sessionVo.setDataType(MediaType.APPLICATION_JSON);
+			sessionVo.setChannelId((short) Long.parseLong("2001"));
+			sessionVo.setSessionTokenID(sessionTokenId);
+			sessionVo.setTokenType("jwt");
+			Map<String, Object> map = new HashMap<>();
+			map.put("isBodyEncrypted", true);
+			map.put("isStateful", false);
+			sessionVo.setChannelInfo(map);
+			sessionVo.setLanguage("dfg");
+			SessionContext.setSessionContext(sessionVo);
+
+			fetchDataMap.put("leadId", refNo);
+			System.out.println("refNo   " + refNo);
+			if (!ifAOFDocsPresent(photoRetryDto.getRefNo())) {
+				try {
+					aofResponse = invokeService("generate_pdf_aof", fetchDataMap);
+				} catch (ServiceBusinessException | ServiceException e) {
+					e.printStackTrace();
+				}
+			}
+
+			if (ifPhotoDocsPresent(photoRetryDto.getRefNo()) && ifAOFDocsPresent(photoRetryDto.getRefNo())) {
+				CustomerOnboarding customerOnboarding = customerOnbordingOptional.get();
+				customerOnboarding.setResponseStatus(null);
+				customerOnboardingRepository.save(customerOnboarding);
+			}
+
+		}
