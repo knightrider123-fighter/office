@@ -1,0 +1,828 @@
+package com.sbi.yono.document.savingsaccount.edms.phototrigger;
+
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
+
+import org.apache.commons.lang.exception.ExceptionUtils;
+import org.springframework.stereotype.Service;
+
+import com.sbi.yono.document.batch.dto.PhotoRetryDto;
+import com.tcs.techbone.logger.FLogger;
+
+@Service
+public class PhotoTriggerCall {
+	private PhotoRetryTrigger photoRetryTrigger;
+	private static final String METHOD_STARTED = "Method Ended";
+
+	private static final String CLASS_NAME = "ProductMasterProcessor";
+	private static final String TIER_NAME = "Document";
+	private static final String METHOD_ENDED = "Method Ended";
+
+	public PhotoTriggerCall(PhotoRetryTrigger photoRetryTrigger) {
+		this.photoRetryTrigger = photoRetryTrigger;
+	}
+
+	public void photoTriggerInit(List<PhotoRetryDto> photoRetryDtoList) {
+		String methodName = "photoTriggerInit";
+		FLogger.info(TIER_NAME, CLASS_NAME, methodName, METHOD_STARTED);
+		for (PhotoRetryDto photoRetryDto : photoRetryDtoList) {
+			FLogger.info(TIER_NAME, CLASS_NAME, methodName, "in For ");
+			photoRetryTrigger.callPhotoTrigger(photoRetryDto);
+
+		}
+		FLogger.info(TIER_NAME, CLASS_NAME, methodName, METHOD_ENDED);
+
+
+	}
+
+
+
+
+package com.sbi.yono.document.savingsaccount.edms.phototrigger;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.apache.tika.Tika;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import com.sbi.yono.document.batch.dto.PhotoRetryDto;
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.CustomerOnboardingRepository;
+import com.sbi.yono.document.savingsaccount.edms.entity.CustomerOnboarding;
+import com.sbi.yono.document.savingsaccount.edms.upload.EdmsUploadConstants;
+import com.tcs.techbone.exception.ServiceBusinessException;
+import com.tcs.techbone.exception.ServiceException;
+import com.tcs.techbone.logger.FLogger;
+import com.tcs.techbone.service.connector.ServiceInvoker;
+import com.tcs.techbone.sessioncontext.SessionContext;
+import com.tcs.techbone.utility.generator.IDGenerator;
+import com.tcs.techbone.vo.SessionVO;
+
+import net.coobird.thumbnailator.Thumbnails;
+import jakarta.ws.rs.core.MediaType;
+
+@Service
+public class PhotoRetryTrigger extends ServiceInvoker {
+	@Value("${path1}")
+	private String path;
+	CustomerOnboardingRepository customerOnboardingRepository;
+
+	public PhotoRetryTrigger(CustomerOnboardingRepository customerOnboardingRepository) {
+		this.customerOnboardingRepository = customerOnboardingRepository;
+	}
+
+	void callPhotoTrigger(PhotoRetryDto photoRetryDto) {
+		String methodName = "callPhotoTrigger";
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, Constants.METHOD_STARTED);
+		String refNo = photoRetryDto.getRefNo();
+
+		boolean isPhotoPresent = ifPhotoDocsPresent(refNo);
+		boolean isAofPresent = ifAOFDocsPresent(refNo);
+
+		if (!isPhotoPresent || !isAofPresent) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, "Photo or aof missing");
+
+			String baseSixtyFour = photoRetryDto.getBaseSixtyFour();
+			if (!isPhotoPresent) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName,
+						"Photo  missing,and creation of photo");
+				photoBase64Saving(refNo, baseSixtyFour);
+			}
+
+			Optional<CustomerOnboarding> customerOnbordingOptional = customerOnboardingRepository.findById(refNo);
+
+			Map<String, Object> fetchDataMap = new HashMap<>();
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, "Session for invoke service");
+
+			SessionVO sessionVo = new SessionVO();
+			String txnId = IDGenerator.generateTransactionId(Integer.parseInt("22"));
+			String sessionTokenId = IDGenerator.generateTransactionId(Integer.parseInt("22"));
+			sessionVo.setTransactionId(txnId);
+			sessionVo.setDataType(MediaType.APPLICATION_JSON);
+			sessionVo.setChannelId((short) Long.parseLong("2001"));
+			sessionVo.setSessionTokenID(sessionTokenId);
+			sessionVo.setTokenType("jwt");
+			Map<String, Object> map = new HashMap<>();
+			map.put("isBodyEncrypted", true);
+			map.put("isStateful", false);
+			sessionVo.setChannelInfo(map);
+			sessionVo.setLanguage("dfg");
+			SessionContext.setSessionContext(sessionVo);
+
+			fetchDataMap.put("leadId", refNo);
+			if (!ifAOFDocsPresent(photoRetryDto.getRefNo())) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, "AOF absent creating AOF");
+
+				try {
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName,
+							"In Try of AOF invoke sevice");
+					invokeService("generate_pdf_aof", fetchDataMap);
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, "After AOF invoke ");
+				} catch (ServiceBusinessException | ServiceException e) {
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, "AOF generation Failed");
+
+				}
+			}
+			boolean isPhotoPresentUpdated = ifPhotoDocsPresent(refNo);
+			boolean isAofPresentUpdated = ifAOFDocsPresent(refNo);
+
+			if (isPhotoPresentUpdated && isAofPresentUpdated) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName,
+						"Recheckecking and validating DOC on path is present");
+				CustomerOnboarding customerOnboarding = customerOnbordingOptional.get();
+				customerOnboarding.setResponseStatus(null);
+				customerOnboardingRepository.save(customerOnboarding);
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, "Saved null status in DB ");
+
+			}
+
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, Constants.METHOD_END);
+
+	}
+
+	public boolean ifPhotoDocsPresent(String leadId) {
+		String thisMethod = "ifPhotoDocsPresent";
+
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_STARTED);
+
+		Boolean photoFlag = false;
+		File fileDirectory = new File(path + File.separator + leadId);
+		File[] files = fileDirectory.listFiles();
+		List<String> fileList;
+		if (fileDirectory.exists()) {
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "File Directory Exist");
+			fileList = Arrays.stream(files).filter(File::isFile).map(File::getName).map(fileName -> {
+				FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+						"traversing File Directory and list creation");
+				int indexOfUnderscore = fileName.indexOf('_');
+				int indexOfExtension = fileName.lastIndexOf('.');
+				return indexOfUnderscore == -1 ? fileName : fileName.substring(indexOfUnderscore + 1, indexOfExtension);
+			}).toList();
+		} else {
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "File Directory not exist failed");
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_END);
+			return false;
+		}
+		for (String doc : fileList) {
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "traversing File  list ");
+			if (doc.contains("Photo")) {
+				FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "Matched PHOTO present...");
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+				photoFlag = true;
+			}
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+
+		return photoFlag;
+	}
+
+	public boolean ifAOFDocsPresent(String leadId) {
+		String thisMethod = "ifAOFDocsPresent";
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_STARTED);
+
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_STARTED);
+
+		Boolean AOFFlag = false;
+		File fileDirectory = new File(path + File.separator + leadId);
+		File[] files = fileDirectory.listFiles();
+		List<String> fileList;
+		if (fileDirectory.exists()) {
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "File Directory Exist");
+
+			fileList = Arrays.stream(files).filter(File::isFile).map(File::getName).map(fileName -> {
+				FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+						"traversing File Directory and list creation");
+				int indexOfUnderscore = fileName.indexOf('_');
+				int indexOfExtension = fileName.lastIndexOf('.');
+				return indexOfUnderscore == -1 ? fileName : fileName.substring(indexOfUnderscore + 1, indexOfExtension);
+			}).toList();
+		} else {
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_END);
+			return false;
+		}
+		for (String doc : fileList) {
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "traversing File  list ");
+			if (doc.contains("AOF")) {
+				FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "Matched PHOTO present...");
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+				AOFFlag = true;
+			}
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return AOFFlag;
+	}
+
+	public void photoBase64Saving(String refNo, String baseSixtyFourString) {
+
+		String methodName = "photoBase64Saving";
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, Constants.METHOD_STARTED);
+		Tika tika = new Tika();
+		if (baseSixtyFourString != null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, "Recived base64 string not null");
+
+			String detect = tika.detect(Base64.decodeBase64(baseSixtyFourString.getBytes()));
+			String fileName = refNo + Constants.LEAD_ID + "Photo" + ".jpeg";
+
+			if (baseSixtyFourString != null
+					&& (detect.contains("jpeg") || detect.contains("jpg") || detect.contains("png"))) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName,
+						"Recived base64 string not null and have vailid tika extension ");
+
+				Boolean photoSaveBoolean = saveDocument(baseSixtyFourString, fileName, refNo);
+				System.out.println(baseSixtyFourString);
+				if (photoSaveBoolean) {
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, "saved in db orignal");
+
+					File photoFileOnPath = new File("/opt/Documents/" + refNo + "/" + fileName);
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName,
+							"if exist going for Compression ");
+					if (photoFileOnPath.exists()) {
+						FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, "Compressing");
+						compressPhoto(photoFileOnPath, photoFileOnPath, "jpeg");
+						FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, "Compressing done");
+
+					}
+				}
+			}
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), methodName, Constants.METHOD_END);
+
+	}
+
+	public boolean saveDocument(String document, String docType, String leadId) {
+		String thisMethod = "saveDocument";
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		String mainfolder = Constants.OPT + File.separator + Constants.DOCUMENTS + File.separator + leadId
+				+ File.separator;
+		File folder = new File(mainfolder);
+
+		if (!folder.exists()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, "folder not present");
+			if (folder.mkdirs()) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, "folder created");
+			} else {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, "faild create");
+			}
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, "folder exits already");
+		}
+
+		try (OutputStream stream = new FileOutputStream(mainfolder + docType)) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, "Document Convert to Base64");
+			byte[] data = org.apache.commons.codec.binary.Base64.decodeBase64(document);
+			stream.write(data);
+		} catch (IOException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, "Document not Convert to Base64");
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					"Exception Document not Convert to Base64" + ExceptionUtils.getStackTrace(e));
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return true;
+	}
+
+	/**
+	 * Method Name: compressPhoto This Method Compress Photo
+	 * 
+	 * @param data
+	 * @param file
+	 * @param type
+	 * @return File
+	 */
+	public File compressPhoto(File data, File file, String type) {
+		String thisMethod = EdmsUploadConstants.COMPRESS_PHOTO;
+		FLogger.info(Constants.TIER_NAME, "compressPhoto", thisMethod, Constants.METHOD_STARTED);
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.COMPRESSING_PHOTO_FILE);
+			long targetSizeBytes = EdmsUploadConstants.INT_THIRTY_FIVE * EdmsUploadConstants.LONG_ONE_ZERO_TWO_FOUR;
+			float compressionQuality = EdmsUploadConstants.FLOAT_ONE_POINT_ZERO;
+
+			String outputFormat = type.equalsIgnoreCase(Constants.PNG1) ? Constants.JPEG1 : type;
+			String originalName = file.getName();
+			String baseName = originalName.contains(EdmsUploadConstants.DOT)
+					? originalName.substring(EdmsUploadConstants.INT_ZERO,
+							originalName.lastIndexOf(EdmsUploadConstants.CHAR_DOT))
+					: originalName;
+			int width = (outputFormat.equalsIgnoreCase(Constants.PNG1)) ? EdmsUploadConstants.INT_FOUR_HUNDRED
+					: EdmsUploadConstants.INT_EIGHT_HUNDRED;
+			int height = (outputFormat.equalsIgnoreCase(Constants.PNG1)) ? EdmsUploadConstants.INT_THREE_HUNDRED
+					: EdmsUploadConstants.INT_SIX_HUNDRED;
+
+			File tempFile = new File(file.getParent(), baseName + Constants.TEMP + outputFormat.toLowerCase());
+
+			Thumbnails.of(data).size(width, height).outputFormat(outputFormat).outputQuality(compressionQuality)
+					.toFile(tempFile);
+			long currentSize = tempFile.length();
+			while (currentSize > targetSizeBytes && compressionQuality > EdmsUploadConstants.FLOAT_ZERO_POINT_ONE
+					&& (outputFormat.equalsIgnoreCase(Constants.JPG2)
+							|| outputFormat.equalsIgnoreCase(Constants.JPEG1))) {
+				compressionQuality -= EdmsUploadConstants.FLOAT_ZERO_POINT_ONE;
+				Thumbnails.of(data).size(width, height).outputFormat(outputFormat).outputQuality(compressionQuality)
+						.toFile(tempFile);
+				currentSize = tempFile.length();
+			}
+
+		} catch (IOException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.COMPRESSING_PHOTO_FILE_FAILED);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EXCEPTION_COMPRESSING_PHOTO_FILE_FAILED + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return file;
+		}
+
+		Path originalPath = file.toPath();
+		Path tempPath = new File(file.getParent(),
+				file.getName().substring(EdmsUploadConstants.INT_ZERO,
+						file.getName().lastIndexOf(EdmsUploadConstants.CHAR_DOT)) + Constants.TEMP
+						+ (type.equalsIgnoreCase(Constants.PNG1) ? Constants.JPEG1 : type).toLowerCase())
+				.toPath();
+		Path replacedPath = new File(file.getParent(),
+				file.getName().substring(0, file.getName().lastIndexOf(EdmsUploadConstants.CHAR_DOT))
+						+ EdmsUploadConstants.DOT
+						+ (type.equalsIgnoreCase(Constants.PNG1) ? Constants.JPEG1 : type).toLowerCase())
+				.toPath();
+
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.CHECKING_FILE_EXIST_ON_PATH);
+			if (Files.exists(originalPath)) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EdmsUploadConstants.FILE_EXIST_ON_PATH_REMOVING_TEMP_FILE);
+				Files.delete(originalPath);
+			}
+		} catch (IOException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.FAILED_TO_DELETE_ORIGINAL_PHOTO_FILE);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EXCEPTION_DELETING_ORIGINAL_PHOTO_FILE + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return file;
+		}
+
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.CHECKING_TEMP_FILE_EXIST_ON_PATH);
+			Files.move(tempPath, replacedPath, StandardCopyOption.REPLACE_EXISTING);
+		} catch (IOException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.FAILED_TO_RENAME_TEMP_FILE_TO_ORIGINAL_FILE);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EXCEPTION_RENAMING_TEMP_FILE + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return file;
+		}
+
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return replacedPath.toFile();
+	}
+
+}
+package com.sbi.yono.document.savingsaccount.edms.ntbtrigger;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class ListSegmenter {
+
+	private ListSegmenter() {
+
+	}
+
+	public static <T> List<List<T>> segmentList(List<T> originalList, int segmentSize) {
+		if (segmentSize <= 0) {
+			throw new IllegalArgumentException("Segment size must be greater than 0");
+		}
+		List<List<T>> segments = new ArrayList<>();
+		int totalSize = originalList.size();
+
+		for (int i = 0; i < totalSize; i += segmentSize) {
+			int endIndex = Math.min(i + segmentSize, totalSize);
+			segments.add(originalList.subList(i, endIndex));
+		}
+
+		return segments;
+	}
+
+}
+
+package com.sbi.yono.document.savingsaccount.edms.ntbtrigger;
+
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
+
+import org.apache.commons.lang.exception.ExceptionUtils;
+import org.springframework.stereotype.Service;
+
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.CustOnbrdingTriggerRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsErrorRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsReqRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsRetryRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.CustmrOnbrdngTrigger;
+import com.sbi.yono.document.savingsaccount.edms.upload.CallNtbEtbRequest;
+import com.sbi.yono.document.savingsaccount.edms.upload.EdmsUploadConstants;
+import com.tcs.techbone.channel.global.reader.GlobalConfigPropertiesReader;
+import com.tcs.techbone.logger.FLogger;
+
+@Service
+public class CallNtbTrigger {
+
+	String thiClass = EdmsUploadConstants.CALL_NTB_REQUEST;
+	private EdmsReqRepo edmsReqRepo;
+	private EdmsRetryRepo edmsRetryRepo;
+	private EdmsErrorRepo edmsErrorRepo;
+	private NTBTrigger ntbTrigger;
+	private CustOnbrdingTriggerRepo custOnbrdingTriggerRepo;
+
+	public CallNtbTrigger(NTBTrigger ntbTrigger, CustOnbrdingTriggerRepo custOnbrdingTriggerRepo,
+			EdmsReqRepo edmsReqRepo, EdmsRetryRepo edmsRetryRepo, EdmsErrorRepo edmsErrorRepo) {
+		this.ntbTrigger = ntbTrigger;
+		this.custOnbrdingTriggerRepo = custOnbrdingTriggerRepo;
+		this.edmsReqRepo = edmsReqRepo;
+		this.edmsRetryRepo = edmsRetryRepo;
+		this.edmsErrorRepo = edmsErrorRepo;
+	}
+
+	/**
+	 * Method Name: journeyType
+	 * 
+	 * @param channelId
+	 */
+	public void ntbTriggerBatchJourney() {
+		String thisMethod = EdmsUploadConstants.JOURNEY_TYPE;
+		FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+				EdmsUploadConstants.METHOD_STARTED);
+		int segmentSize = Integer.parseInt((String) GlobalConfigPropertiesReader.getInstance()
+				.getPropertyById(EdmsUploadConstants.EDMS_SEGEMENT_SIZE));
+		int threadSize = Integer.parseInt((String) GlobalConfigPropertiesReader.getInstance()
+				.getPropertyById(EdmsUploadConstants.EDMS_THREAD_SIZE));
+
+		FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+				EdmsUploadConstants.NTB_REQUEST_FOR_SA);
+		List<CustmrOnbrdngTrigger> custmrOnbrdngTrigger = custOnbrdingTriggerRepo.findByStatus();
+		if (custmrOnbrdngTrigger.isEmpty()) {
+			FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.LIST_OF_CUSTOMER_ONBRDING_IS_EMPTY);
+		} else {
+			FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.LIST_OF_CUSTOMER_ONBRDING_IS_NOT_EMPTY);
+
+			List<List<CustmrOnbrdngTrigger>> segmentList = ListSegmenter.segmentList(custmrOnbrdngTrigger, segmentSize);
+			ExecutorService customExecutor = Executors.newFixedThreadPool(threadSize);
+			threadsRunner(segmentSize, segmentList, customExecutor);
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+	}
+
+	/**
+	 * @param segmentSize
+	 * @param segmentList
+	 * @param customExecutor
+	 */
+	public void threadsRunner(int segmentSize, List<List<CustmrOnbrdngTrigger>> segmentList,
+			ExecutorService customExecutor) {
+		String thisMethod = "threadsRunner";
+		try {
+			List<CompletableFuture<String>> futures = IntStream.range(0, segmentList.size()).mapToObj(i -> {
+				FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+						"Batch from " + i + 1 + " - " + (i + 1) * segmentSize);
+				FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+						"Starting ref_no" + segmentList.get(i).get(0).getRef_no());
+				FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+						"Ending ref_no" + segmentList.get(i).get(segmentList.get(i).size() - 1).getRef_no());
+				return CompletableFuture.supplyAsync(() -> {
+					long threadName = Thread.currentThread().threadId();
+					FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+							"Executing task " + i + " on thread: " + threadName);
+					segmentProcess(segmentList.get(i));
+					FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+							"Batch " + ((((i + 1) * segmentSize) - segmentSize) + 1) + " - " + ((i + 1) * segmentSize)
+									+ " completed successfully and batch size was " + segmentSize + " on thread: "
+									+ threadName);
+					return "Result of task " + i;
+				}, customExecutor);
+			}).toList();
+
+			CompletableFuture<Void> allOf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+
+			CompletableFuture<List<String>> allResults = allOf
+					.thenApplyAsync(v -> futures.stream().map(CompletableFuture::join).toList(), customExecutor);
+
+			List<String> results11 = allResults.get();
+			FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+					"\nFinal results received: " + results11.size() + " results.");
+		} catch (InterruptedException | ExecutionException e) {
+			FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.CUSTOMER_ONBRDING_AND_EDMS_UPLOAD_DOC_IS_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, CallNtbEtbRequest.class.getSimpleName(), thisMethod,
+					EdmsUploadConstants.CIPHER_IS_IN_AN_ILLEGAL_STATE_FOR_USER + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		} finally {
+			customExecutor.shutdown();
+			try {
+				if (!customExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+					customExecutor.shutdownNow();
+				}
+			} catch (InterruptedException e) {
+				customExecutor.shutdownNow();
+				Thread.currentThread().interrupt();
+			}
+		}
+	}
+
+	/**
+	 * @param list
+	 */
+	public void segmentProcess(List<CustmrOnbrdngTrigger> list) {
+		String thisMethod = "newMethod";
+		FLogger.info(EdmsUploadConstants.TIER_NAME, this.getClass().getName(), thisMethod,
+				EdmsUploadConstants.METHOD_STARTED);
+		for (CustmrOnbrdngTrigger cot : list) {
+			boolean reqFlag = edmsReqRepo.existsById(cot.getRef_no());
+			boolean retryFlag = edmsRetryRepo.existsById(cot.getRef_no());
+			if (!reqFlag && !retryFlag) {
+				String status = ntbTrigger.triggerEDMSSvc(cot.getRef_no());
+				if (status.equals("Success")) {
+					edmsErrorRepo.deleteByRefNo(cot.getRef_no());
+				}
+			}
+		}
+
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+	}
+}
+
+
+package com.sbi.yono.document.savingsaccount.edms.ntbtrigger;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+
+import org.apache.commons.lang.exception.ExceptionUtils;
+import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.upload.EdmsUploadConstants;
+import com.tcs.techbone.logger.FLogger;
+
+import net.coobird.thumbnailator.Thumbnails;
+
+@Component
+public class DetailsUtility {
+	static String thiClass = "DetailsUtility";
+	private static final String METHOD_STARTED = "Method Started";
+	private static final String METHOD_END = "Method end";
+	private static final String TIER_NAME = "Document";
+
+	/**
+	 * Method Name: replacePngWithJpegInFrontAndBackPhotoName
+	 * 
+	 * @param json
+	 * @param type
+	 * @return String
+	 */
+	public String replacePngWithJpegInFrontAndBackPhotoName(String json, String type) {
+		String thisMethod = EdmsUploadConstants.REPLACE_PNG_WITH_JPEG_IN_FRONT_AND_BACK_PHOTO_NAME;
+		FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_STARTED);
+		ObjectMapper mapper = new ObjectMapper();
+		JsonNode rootNode = null;
+		try {
+			FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.JSON_ROOT_NODE_PRESENT);
+			rootNode = mapper.readTree(json);
+			if (rootNode.isObject()) {
+				FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.JSON_ROOT_NODE_OBJECT_PRESENT);
+				ObjectNode objNode = (ObjectNode) rootNode;
+				JsonNode frontNode = objNode.get(Constants.FRONTPHOTONAME);
+				if (frontNode != null && frontNode.isTextual() && type.equals(Constants.FRONT)) {
+					FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.FRONT_PHOTO_PRESENT);
+					String frontPhotoName = frontNode.asText();
+					if (frontPhotoName.endsWith(EdmsUploadConstants.PNG_EXTENSION)) {
+						FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.FRONT_PHOTO_TYPE_PNG);
+						String updatedFront = frontPhotoName.substring(0, frontPhotoName.length() - 4) + EdmsUploadConstants.JPEG_EXTENSION;
+						objNode.put(Constants.FRONTPHOTONAME, updatedFront);
+					}
+				}
+				JsonNode backNode = objNode.get(Constants.BACKPHOTONAME);
+				if (backNode != null && backNode.isTextual() && type.equals(Constants.BACK)) {
+					FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.BACK_PHOTO_PRESENT);
+					String backPhotoName = backNode.asText();
+					if (backPhotoName.endsWith(EdmsUploadConstants.PNG_EXTENSION)) {
+						FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.BACK_PHOTO_TYPE_PNG);
+						String updatedBack = backPhotoName.substring(0, backPhotoName.length() - 4) + EdmsUploadConstants.JPEG_EXTENSION;
+						objNode.put(Constants.BACKPHOTONAME, updatedBack);
+					}
+				}
+				FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_END);
+				return mapper.writeValueAsString(objNode);
+			} else {
+				FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_END);
+				return json;
+			}
+		} catch (JsonProcessingException e1) {
+			FLogger.info(TIER_NAME, EdmsUploadConstants.EMPTY_STRING, EdmsUploadConstants.EMPTY_STRING, EdmsUploadConstants.JSON_NOT_PRESENT);
+			FLogger.error(TIER_NAME, EdmsUploadConstants.EMPTY_STRING, EdmsUploadConstants.EMPTY_STRING, EdmsUploadConstants.EXCEPTION_JSON_NOT_PRESENT + ExceptionUtils.getStackTrace(e1));
+			FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_END);
+			return json;
+		}
+	}
+
+	/**
+	 * Method Name: compress This Method Compress Document
+	 * 
+	 * @param data
+	 * @param file
+	 * @param type
+	 * @return File
+	 */
+	public File compress(File data, File file, String type) {
+		String thisMethod = EdmsUploadConstants.COMPRESS;
+		FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_STARTED);
+		try {
+			FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.COMPRESSING_FILE);
+			long targetSizeBytes = EdmsUploadConstants.INT_ONE_HUNDRED_THIRTY * EdmsUploadConstants.LONG_ONE_ZERO_TWO_FOUR;
+			float compressionQuality = EdmsUploadConstants.FLOAT_ONE_POINT_ZERO;
+
+			String outputFormat = type.equalsIgnoreCase(Constants.PNG1) ? Constants.JPEG1 : type;
+			String originalName = file.getName();
+			String baseName = originalName.contains(EdmsUploadConstants.DOT) ? originalName.substring(0, originalName.lastIndexOf(EdmsUploadConstants.CHAR_DOT))
+					: originalName;
+			int width = (outputFormat.equalsIgnoreCase(Constants.PNG1)) ? EdmsUploadConstants.INT_FOUR_HUNDRED : EdmsUploadConstants.INT_EIGHT_HUNDRED;
+			int height = (outputFormat.equalsIgnoreCase(Constants.PNG1)) ? EdmsUploadConstants.INT_THREE_HUNDRED : EdmsUploadConstants.INT_SIX_HUNDRED;
+
+			File tempFile = new File(file.getParent(), baseName + Constants.TEMP + outputFormat.toLowerCase());
+
+			Thumbnails.of(data).size(width, height).outputFormat(outputFormat).outputQuality(compressionQuality)
+					.toFile(tempFile);
+			long currentSize = tempFile.length();
+			while (currentSize > targetSizeBytes && compressionQuality > EdmsUploadConstants.FLOAT_ZERO_POINT_ONE
+					&& (outputFormat.equalsIgnoreCase(Constants.JPG2)
+							|| outputFormat.equalsIgnoreCase(Constants.JPEG1))) {
+				compressionQuality -= EdmsUploadConstants.FLOAT_ZERO_POINT_ONE;
+				Thumbnails.of(data).size(width, height).outputFormat(outputFormat).outputQuality(compressionQuality)
+						.toFile(tempFile);
+				currentSize = tempFile.length();
+			}
+
+		} catch (IOException e) {
+			FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.COMPRESSING_PHOTO_FILE_FAILED);
+			FLogger.error(TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EXCEPTION_COMPRESSING_PHOTO_FILE_FAILED + ExceptionUtils.getStackTrace(e));
+			FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_END);
+			return file;
+		}
+
+		Path originalPath = file.toPath();
+		Path tempPath = new File(file.getParent(), file.getName().substring(0, file.getName().lastIndexOf('.'))
+				+ Constants.TEMP + (type.equalsIgnoreCase(Constants.PNG1) ? Constants.JPEG1 : type).toLowerCase())
+				.toPath();
+		Path replacedPath = new File(file.getParent(), file.getName().substring(0, file.getName().lastIndexOf('.'))
+				+ "." + (type.equalsIgnoreCase(Constants.PNG1) ? Constants.JPEG1 : type).toLowerCase()).toPath();
+
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.CHECKING_FILE_EXIST_ON_PATH);
+			if (Files.exists(originalPath)) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.FILE_EXIST_ON_PATH_REMOVING_TEMP_FILE);
+				Files.delete(originalPath);
+			}
+		} catch (IOException e) {
+			FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.FAILED_TO_DELETE_ORIGINAL_PHOTO_FILE);
+			FLogger.error(TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EXCEPTION_DELETING_ORIGINAL_PHOTO_FILE + ExceptionUtils.getStackTrace(e));
+			FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_END);
+			return file;
+		}
+
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.CHECKING_TEMP_FILE_EXIST_ON_PATH);
+			Files.move(tempPath, replacedPath, StandardCopyOption.REPLACE_EXISTING);
+		} catch (IOException e) {
+			FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.FAILED_TO_RENAME_TEMP_FILE_TO_ORIGINAL_FILE);
+			FLogger.error(TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EXCEPTION_RENAMING_TEMP_FILE + ExceptionUtils.getStackTrace(e));
+			FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_END);
+			return file;
+		}
+
+		FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_END);
+		return replacedPath.toFile();
+	}
+
+	/**
+	 * Method Name: compressPhoto This Method Compress Photo
+	 * 
+	 * @param data
+	 * @param file
+	 * @param type
+	 * @return File
+	 */
+	public File compressPhoto(File data, File file, String type) {
+		String thisMethod = EdmsUploadConstants.COMPRESS_PHOTO;
+		FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_STARTED);
+		try {
+			FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.COMPRESSING_PHOTO_FILE);
+			long targetSizeBytes = EdmsUploadConstants.INT_THIRTY_FIVE * EdmsUploadConstants.LONG_ONE_ZERO_TWO_FOUR;
+			float compressionQuality = EdmsUploadConstants.FLOAT_ONE_POINT_ZERO;
+
+			String outputFormat = type.equalsIgnoreCase(Constants.PNG1) ? Constants.JPEG1 : type;
+			String originalName = file.getName();
+			String baseName = originalName.contains(EdmsUploadConstants.DOT) ? originalName.substring(EdmsUploadConstants.INT_ZERO, originalName.lastIndexOf(EdmsUploadConstants.CHAR_DOT))
+					: originalName;
+			int width = (outputFormat.equalsIgnoreCase(Constants.PNG1)) ? EdmsUploadConstants.INT_FOUR_HUNDRED : EdmsUploadConstants.INT_EIGHT_HUNDRED;
+			int height = (outputFormat.equalsIgnoreCase(Constants.PNG1)) ? EdmsUploadConstants.INT_THREE_HUNDRED : EdmsUploadConstants.INT_SIX_HUNDRED;
+
+			File tempFile = new File(file.getParent(), baseName + Constants.TEMP + outputFormat.toLowerCase());
+
+			Thumbnails.of(data).size(width, height).outputFormat(outputFormat).outputQuality(compressionQuality)
+					.toFile(tempFile);
+			long currentSize = tempFile.length();
+			while (currentSize > targetSizeBytes && compressionQuality > EdmsUploadConstants.FLOAT_ZERO_POINT_ONE
+					&& (outputFormat.equalsIgnoreCase(Constants.JPG2)
+							|| outputFormat.equalsIgnoreCase(Constants.JPEG1))) {
+				compressionQuality -= EdmsUploadConstants.FLOAT_ZERO_POINT_ONE;
+				Thumbnails.of(data).size(width, height).outputFormat(outputFormat).outputQuality(compressionQuality)
+						.toFile(tempFile);
+				currentSize = tempFile.length();
+			}
+
+		} catch (IOException e) {
+			FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.COMPRESSING_PHOTO_FILE_FAILED);
+			FLogger.error(TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EXCEPTION_COMPRESSING_PHOTO_FILE_FAILED + ExceptionUtils.getStackTrace(e));
+			FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_END);
+			return file;
+		}
+
+		Path originalPath = file.toPath();
+		Path tempPath = new File(file.getParent(), file.getName().substring(EdmsUploadConstants.INT_ZERO, file.getName().lastIndexOf(EdmsUploadConstants.CHAR_DOT))
+				+ Constants.TEMP + (type.equalsIgnoreCase(Constants.PNG1) ? Constants.JPEG1 : type).toLowerCase())
+				.toPath();
+		Path replacedPath = new File(file.getParent(), file.getName().substring(0, file.getName().lastIndexOf(EdmsUploadConstants.CHAR_DOT))
+				+ EdmsUploadConstants.DOT + (type.equalsIgnoreCase(Constants.PNG1) ? Constants.JPEG1 : type).toLowerCase()).toPath();
+
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.CHECKING_FILE_EXIST_ON_PATH);
+			if (Files.exists(originalPath)) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.FILE_EXIST_ON_PATH_REMOVING_TEMP_FILE);
+				Files.delete(originalPath);
+			}
+		} catch (IOException e) {
+			FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.FAILED_TO_DELETE_ORIGINAL_PHOTO_FILE);
+			FLogger.error(TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EXCEPTION_DELETING_ORIGINAL_PHOTO_FILE + ExceptionUtils.getStackTrace(e));
+			FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_END);
+			return file;
+		}
+
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.CHECKING_TEMP_FILE_EXIST_ON_PATH);
+			Files.move(tempPath, replacedPath, StandardCopyOption.REPLACE_EXISTING);
+		} catch (IOException e) {
+			FLogger.info(TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.FAILED_TO_RENAME_TEMP_FILE_TO_ORIGINAL_FILE);
+			FLogger.error(TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EXCEPTION_RENAMING_TEMP_FILE + ExceptionUtils.getStackTrace(e));
+			FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_END);
+			return file;
+		}
+
+		FLogger.info(TIER_NAME, thiClass, thisMethod, METHOD_END);
+		return replacedPath.toFile();
+	}
+	
+	
+}
+
