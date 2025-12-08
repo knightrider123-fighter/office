@@ -46,3 +46,49 @@
 			}
 
 		}
+
+void callPhotoTrigger(PhotoRetryDto dto) {
+
+    String refNo = dto.getRefNo();
+    String base64 = dto.getBaseSixtyFour();
+
+    boolean isPhotoPresent = ifPhotoDocsPresent(refNo);
+    boolean isAofPresent = ifAOFDocsPresent(refNo);
+
+    // Step 1: Execute only if any document is missing
+    if (!isPhotoPresent || !isAofPresent) {
+
+        // --- PHOTO PROCESSING ---
+        if (!isPhotoPresent) {
+            System.out.println("Saving missing photo for refNo: " + refNo);
+            photoBase64Saving(refNo, base64);
+        }
+
+        // --- FETCH CUSTOMER ONBOARDING ---
+        Optional<CustomerOnboarding> customerOpt = customerOnboardingRepository.findById(refNo);
+
+        // --- PREPARE SESSION CONTEXT ---
+        setupSessionContext();
+
+        // --- PREPARE REQUEST MAP ---
+        Map<String, Object> fetchDataMap = new HashMap<>();
+        fetchDataMap.put("leadId", refNo);
+
+        // --- AOF PDF GENERATION ---
+        if (!isAofPresent) {
+            try {
+                invokeService("generate_pdf_aof", fetchDataMap);
+            } catch (ServiceBusinessException | ServiceException e) {
+                e.printStackTrace();
+            }
+        }
+
+        // --- CHECK ALL DOCUMENTS PRESENT NOW ---
+        if (ifPhotoDocsPresent(refNo) && ifAOFDocsPresent(refNo)) {
+            customerOpt.ifPresent(customer -> {
+                customer.setResponseStatus(null);
+                customerOnboardingRepository.save(customer);
+            });
+        }
+    }
+}
