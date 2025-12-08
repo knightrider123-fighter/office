@@ -25,3 +25,66 @@ public class PhotoRetryTrigger {
 
 
 }
+
+
+package com.sbi.yono.document.savingsaccount.edms.phototrigger;
+
+import static org.mockito.Mockito.*;
+
+import java.util.Arrays;
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sbi.yono.document.batch.dto.PhotoRetryDto;
+
+@ExtendWith(MockitoExtension.class)
+class PhotoTriggerCallTest {
+
+    @Mock
+    private PhotoRetryTrigger photoRetryTrigger;
+
+    @InjectMocks
+    private PhotoTriggerCall photoTriggerCall;
+
+    @Test
+    void testPhotoTriggerInit_ShouldCallTriggerForEachDto() {
+
+        // Arrange
+        PhotoRetryDto dto1 = new PhotoRetryDto();
+        dto1.setRefNo("REF101");
+        dto1.setBaseSixtyFour("b64_1");
+
+        PhotoRetryDto dto2 = new PhotoRetryDto();
+        dto2.setRefNo("REF102");
+        dto2.setBaseSixtyFour("b64_2");
+
+        List<PhotoRetryDto> mockList = Arrays.asList(dto1, dto2);
+
+        // Act
+        photoTriggerCall.photoTriggerInit(mockList);
+
+        // Assert
+        verify(photoRetryTrigger, times(1)).callPhotoTrigger(dto1);
+        verify(photoRetryTrigger, times(1)).callPhotoTrigger(dto2);
+
+        verifyNoMoreInteractions(photoRetryTrigger);
+    }
+
+    @Test
+    void testPhotoTriggerInit_EmptyList_ShouldNotInvokeTrigger() {
+
+        // Arrange
+        List<PhotoRetryDto> emptyList = List.of();
+
+        // Act
+        photoTriggerCall.photoTriggerInit(emptyList);
+
+        // Assert
+        verifyNoInteractions(photoRetryTrigger);
+    }
+}
