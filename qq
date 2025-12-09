@@ -5,3 +5,14 @@ SELECT ref_no, cstmr_type, strt_dt, last_updtd_dt, status, mbl_no, frst_nm, mddl
 	FROM yono_dcmnt.edms_error;
 	
 		select a.ref_no,b.applcnt_dtls->'lead'->'personalDtls'->>'photo' as photo from yono_dcmnt.edms_error a inner join yono_cstmr.cstmr_onbrdng b  a.ref_no=b.ref_no
+
+
+SELECT 
+    a.ref_no,
+    b.applcnt_dtls->'lead'->'personalDtls'->>'photo' AS photo
+FROM 
+    yono_dcmnt.edms_error a
+INNER JOIN 
+    yono_cstmr.cstmr_onbrdng b
+ON 
+    a.ref_no = b.ref_no;
