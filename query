@@ -27,3 +27,19 @@ JOIN yono_cstmr.cstmr_onbrdng c
     ON e.ref_no = c.ref_no
 WHERE e.error_code = '1001'
   AND LOWER(e.error_description) LIKE '%photo%';
+
+SELECT ref_no, cstmr_type, strt_dt, last_updtd_dt, status, mbl_no, frst_nm, mddle_nm, last_nm, ckyc_no, cif, prdct_type, prdct_sub_type, applcnt_dtls, vkyc_smmry, aadhar_dtls, pan_dtls, frm60_dtls, amlock_dtls, mkr_id, mkr_crtn_dt, mkr_updtn_dt, chckr_id, chckr_crtn_dt, chckr_updtn_dt, vkyc_dtls, digilocker_dtls, flg, rjctd_rsn, dvc_info, updtd_dt, crtd_by, updtd_by, alrt_dtls, fatca_dtls, intl_state, crtn_dt, brnch_cd, response_status
+	FROM yono_cstmr.cstmr_onbrdng 
+
+"SBIY23118517282473pJqeDUL"	"RI"	"2025-11-24 11:50:10.701503"	"2025-12-09 16:27:34.766867"	"049"	"+917028921267"	"Rushikesh"	"Rajendra"	"Barsing"			"SA"	"InstaPlus"	"{
+    "null"		"{""listmatch"":null,""reqId"":""SBIY225328115821896""}"	546456			4536456			"{""url"":""?params=Stf9Q5zKDMo80rSr2WegLoYnVk2NqgN3""}"	"3"			"{""device"":""01"",""platform"":""02""}"	"2025-12-04 17:27:19.745964"			"42487589901"	"""true"""	"005"	"2025-11-24 11:50:10.701633"	"61520"	
+
+	
+	SELECT ref_no, cif, channel_id, job_id, crtd_dt, updtd_dt, crtd_by, updtd_by, error_code, error_description
+	FROM yono_dcmnt.edms_error
+
+
+SELECT ref_no, accnt_type, accnt_sub_type, status, cif, jrny_strt_frm_chnl, jrny_clsd_frm_chnl, start_dt, end_dt, is_extng_cust_dtls_chngd, applcnt_dtls, nominee_dtls, brnch_dtls, card_dtls, chq_bk_rq_dtls, mkr_id, mkr_crtn_dt, mkr_updtn_dt, chckr_id, chckr_crtn_dt, chckr_updtn_dt, mbl_no, crtn_dt, updtd_dt, crtd_by, updtd_by, prdct_type, prdct_sub_type, ckyc_dtls, acnt_nmbr, jrnl_nmbrs, alrt_dtls, isd_cd
+	FROM yono_accnt.accnt_onbrdng;
+
+"SBIY22426812090579VOjXrMH"	
