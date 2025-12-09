@@ -1,0 +1,7 @@
+SELECT ref_no, cstmr_type, strt_dt, last_updtd_dt, status, mbl_no, frst_nm, mddle_nm, last_nm, ckyc_no, cif, prdct_type, prdct_sub_type, applcnt_dtls, vkyc_smmry, aadhar_dtls, pan_dtls, frm60_dtls, amlock_dtls, mkr_id, mkr_crtn_dt, mkr_updtn_dt, chckr_id, chckr_crtn_dt, chckr_updtn_dt, vkyc_dtls, digilocker_dtls, flg, rjctd_rsn, dvc_info, updtd_dt, crtd_by, updtd_by, alrt_dtls, fatca_dtls, intl_state, crtn_dt, brnch_cd, response_status
+	FROM yono_cstmr.cstmr_onbrdng 
+	
+	SELECT ref_no, cif, channel_id, job_id, crtd_dt, updtd_dt, crtd_by, updtd_by, error_code, error_description
+	FROM yono_dcmnt.edms_error;
+	
+		select a.ref_no,b.applcnt_dtls->'lead'->'personalDtls'->>'photo' as photo from yono_dcmnt.edms_error a inner join yono_cstmr.cstmr_onbrdng b  a.ref_no=b.ref_no
