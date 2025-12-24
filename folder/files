@@ -291,3 +291,64 @@ public class EdmsDocDetails implements Serializable {
 	
 
 }
+
+package com.sbi.yono.document.savingsaccount.edms.entity;
+
+import java.io.Serializable;
+import java.util.Objects;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
+
+@Embeddable
+public class EdmsDocDetailsComposite implements Serializable {
+
+	private static final long serialVersionUID = 1L;
+	@Column(name = "ref_no")
+	private String refNo;
+
+	@Column(name = "doc_id")
+	private String docId;
+
+	public String getRefNo() {
+		return refNo;
+	}
+
+	public void setRefNo(String refNo) {
+		this.refNo = refNo;
+	}
+
+	
+	@Override
+	public int hashCode() {
+		return Objects.hash(docId, refNo);
+	}
+
+
+	public String getDocId() {
+		return docId;
+	}
+
+	
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		EdmsDocDetailsComposite other = (EdmsDocDetailsComposite) obj;
+		return Objects.equals(docId, other.docId) && Objects.equals(refNo, other.refNo);
+	}
+
+	public EdmsDocDetailsComposite() {
+		super();
+	}
+
+	public void setDocId(String docId) {
+		this.docId = docId;
+		
+	}
+
+}
