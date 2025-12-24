@@ -352,3 +352,20 @@ public class EdmsDocDetailsComposite implements Serializable {
 	}
 
 }
+
+
+
+@Repository
+public interface DocumentRepository
+        extends JpaRepository<EdmsDocDetails, EdmsDocDetailsComposite> {
+
+    @Query("SELECT d.filePath " +
+           "FROM EdmsDocDetails d " +
+           "WHERE d.compositeKeys.refNo = :refNo " +
+           "AND (d.compositeKeys.docId = :docId1 OR d.compositeKeys.docId = :docId2) " +
+           "ORDER BY d.compositeKeys.docId ASC")
+    List<String> findFilePathsByRefNoAndTwoDocIdsOrderByDocId(
+            @Param("refNo") String refNo,
+            @Param("docId1") String docId1,
+            @Param("docId2") String docId2);
+}
