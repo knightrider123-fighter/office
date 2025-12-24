@@ -11,3 +11,283 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, DocId>
             @Param("docId1") String docId1,
             @Param("docId2") String docId2);
 }
+package com.sbi.yono.document.savingsaccount.edms.entity;
+
+import java.io.Serializable;
+import java.time.LocalDateTime;
+import java.util.Objects;
+
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.context.annotation.Scope;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.EmbeddedId;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
+
+@Entity
+@Scope(value = ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+@Table(schema = "yono_dcmnt", name = "edms_doc_dtls")
+public class EdmsDocDetails implements Serializable {
+
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+	
+	@EmbeddedId
+	private EdmsDocDetailsComposite compositeKeys;
+
+	@Column(name = "doc_edms_map")
+	private String docEdmsMap;
+
+	@Column(name = "file_name")
+	private String fileName;
+
+	@Column(name = "id_no")
+	private String idNo;
+
+	@Column(name = "ckyc_no")
+	private Integer ckycNumber;
+
+	@Column(name = "cersai_flag")
+	private boolean cersaiFlag;
+
+	@Column(name = "archival_flag")
+	private boolean archivalFlag;
+
+	@Column(name = "doc_type")
+	private String docType;
+
+	@Column(name = "scanned_dt")
+	private LocalDateTime scannedDate;
+
+	@Column(name = "doc_code")
+	private String docCode;
+
+	@Column(name = "doc_category")
+	private String docCategory;
+
+	@Column(name = "doc_identifier")
+	private String docIdentifier;
+
+	@Column(name = "doc_expiry_date")
+	private LocalDateTime docExpiryDate;
+
+	@Column(name = "cmmnts")
+	private String comments;
+
+	@Column(name = "crtd_by")
+	private String crtdBy;
+	
+	@Column(name = "updtd_by")
+	private String updtBy;
+	
+	@Column(name = "crtd_dt")
+	private LocalDateTime crtdDt;
+	
+	@Column(name = "updtd_dt")
+	private LocalDateTime updtDt;
+
+	@Column(name = "file_path")
+	private String filePath;
+	
+	@Column(name="doc_id", insertable=false, updatable=false)
+	private String docId;
+
+	
+	public String getDocId() {
+		return docId;
+	}
+
+	public void setDocId(String docId) {
+		this.docId = docId;
+	}
+
+	public String getCrtdBy() {
+		return crtdBy;
+	}
+
+	public void setCrtdBy(String crtdBy) {
+		this.crtdBy = crtdBy;
+	}
+
+	public String getUpdtBy() {
+		return updtBy;
+	}
+
+	public void setUpdtBy(String updtBy) {
+		this.updtBy = updtBy;
+	}
+
+	public LocalDateTime getCrtdDt() {
+		return crtdDt;
+	}
+
+	public void setCrtdDt(LocalDateTime crtdDt) {
+		this.crtdDt = crtdDt;
+	}
+
+	public LocalDateTime getUpdtDt() {
+		return updtDt;
+	}
+
+	public void setUpdtDt(LocalDateTime updtDt) {
+		this.updtDt = updtDt;
+	}
+	
+	public EdmsDocDetailsComposite getCompositeKeys() {
+		return compositeKeys;
+	}
+
+	public void setCompositeKeys(EdmsDocDetailsComposite compositeKeys) {
+		this.compositeKeys = compositeKeys;
+	}
+
+	public String getDocEdmsMap() {
+		return docEdmsMap;
+	}
+
+	public void setDocEdmsMap(String docEdmsMap) {
+		this.docEdmsMap = docEdmsMap;
+	}
+
+	public String getFileName() {
+		return fileName;
+	}
+
+	public void setFileName(String fileName) {
+		this.fileName = fileName;
+	}
+
+	public String getIdNo() {
+		return idNo;
+	}
+
+	public void setIdNo(String idNo) {
+		this.idNo = idNo;
+	}
+
+	public Integer getCkycNumber() {
+		return ckycNumber;
+	}
+
+	public void setCkycNumber(Integer ckycNumber) {
+		this.ckycNumber = ckycNumber;
+	}
+
+	public boolean isCersaiFlag() {
+		return cersaiFlag;
+	}
+
+	public void setCersaiFlag(boolean cersaiFlag) {
+		this.cersaiFlag = cersaiFlag;
+	}
+
+	public boolean isArchivalFlag() {
+		return archivalFlag;
+	}
+
+	public void setArchivalFlag(boolean archivalFlag) {
+		this.archivalFlag = archivalFlag;
+	}
+
+	public String getDocType() {
+		return docType;
+	}
+
+	public void setDocType(String docType) {
+		this.docType = docType;
+	}
+
+	public LocalDateTime getScannedDate() {
+		return scannedDate;
+	}
+
+	public void setScannedDate(LocalDateTime scannedDate) {
+		this.scannedDate = scannedDate;
+	}
+
+	public String getDocCode() {
+		return docCode;
+	}
+
+	public void setDocCode(String docCode) {
+		this.docCode = docCode;
+	}
+
+	public String getDocCategory() {
+		return docCategory;
+	}
+
+	public void setDocCategory(String docCategory) {
+		this.docCategory = docCategory;
+	}
+
+	public String getDocIdentifier() {
+		return docIdentifier;
+	}
+
+	public void setDocIdentifier(String docIdentifier) {
+		this.docIdentifier = docIdentifier;
+	}
+
+	public LocalDateTime getDocExpiryDate() {
+		return docExpiryDate;
+	}
+
+	public void setDocExpiryDate(LocalDateTime docExpiryDate) {
+		this.docExpiryDate = docExpiryDate;
+	}
+
+	public String getComments() {
+		return comments;
+	}
+
+	public void setComments(String comments) {
+		this.comments = comments;
+	}
+
+	public String getFilePath() {
+		return filePath;
+	}
+
+	public void setFilePath(String filePath) {
+		this.filePath = filePath;
+	}
+
+	public EdmsDocDetails() {
+		super();
+	}
+	
+	@Override
+	public int hashCode() {
+		return Objects.hash(archivalFlag, cersaiFlag, ckycNumber, comments, compositeKeys, crtdBy, crtdDt, docCategory,
+				docCode, docEdmsMap, docExpiryDate, docId, docIdentifier, docType, fileName, filePath, idNo,
+				scannedDate, updtBy, updtDt);
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		EdmsDocDetails other = (EdmsDocDetails) obj;
+		return archivalFlag == other.archivalFlag && cersaiFlag == other.cersaiFlag
+				&& Objects.equals(ckycNumber, other.ckycNumber) && Objects.equals(comments, other.comments)
+				&& Objects.equals(compositeKeys, other.compositeKeys) && Objects.equals(crtdBy, other.crtdBy)
+				&& Objects.equals(crtdDt, other.crtdDt) && Objects.equals(docCategory, other.docCategory)
+				&& Objects.equals(docCode, other.docCode) && Objects.equals(docEdmsMap, other.docEdmsMap)
+				&& Objects.equals(docExpiryDate, other.docExpiryDate) && Objects.equals(docId, other.docId)
+				&& Objects.equals(docIdentifier, other.docIdentifier) && Objects.equals(docType, other.docType)
+				&& Objects.equals(fileName, other.fileName) && Objects.equals(filePath, other.filePath)
+				&& Objects.equals(idNo, other.idNo) && Objects.equals(scannedDate, other.scannedDate)
+				&& Objects.equals(updtBy, other.updtBy) && Objects.equals(updtDt, other.updtDt);
+	}
+
+	
+
+}
