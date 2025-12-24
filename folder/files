@@ -1,1 +1,13 @@
 
+@Repository
+public interface DocumentRepository extends JpaRepository<DocumentEntity, DocId> {
+
+    @Query("SELECT d.docPath FROM DocumentEntity d " +
+           "WHERE d.id.refNo = :refNo " +
+           "AND (d.id.docId = :docId1 OR d.id.docId = :docId2) " +
+           "ORDER BY d.id.docId ASC")
+    List<String> findDocPathsByRefNoAndTwoDocIdsOrderByDocId(
+            @Param("refNo") String refNo,
+            @Param("docId1") String docId1,
+            @Param("docId2") String docId2);
+}
