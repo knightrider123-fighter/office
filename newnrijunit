@@ -248,3 +248,263 @@ public class TriggerNRI {
 	}
 
 }
+
+####$$
+package com.sbi.yono.document.savingsaccount.edms.upload;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+import java.util.Collections;
+import java.util.Optional;
+
+import org.json.JSONException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import com.sbi.yono.document.savingsaccount.edms.commonekyc.CommonEkycPdf;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.CustomerPdRepository;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsDocDetailsRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsUploadDocRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.CustomerPd;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsUploadDoc;
+import com.sbi.yono.document.savingsaccount.edms.uploaddoc.UploadDocumentSvc;
+import com.tcs.techbone.exception.ServiceBusinessException;
+import com.tcs.techbone.exception.ServiceException;
+
+@ExtendWith(MockitoExtension.class)
+class TriggerNRITest {
+
+    @InjectMocks
+    private TriggerNRI triggerNRI;
+
+    @Mock
+    private CustomerPdRepository customerPdRepository;
+
+    @Mock
+    private EdmsUploadDocRepo edmsUploadDocRepo;
+
+    @Mock
+    private EdmsDocDetailsRepo edmsDocDetailsRepo;
+
+    @Mock
+    private UploadDocumentSvc uploadDocumentSvc;
+
+    @Mock
+    private CommonEkycPdf commonEkycPdf;
+
+    @BeforeEach
+    void setup() {
+        ReflectionTestUtils.setField(triggerNRI, "name", "/tmp");
+        ReflectionTestUtils.setField(triggerNRI, "statusflag", "Y");
+    }
+
+    /* -------------------------------------------------
+     * triggerSvcNri() TEST CASES
+     * ------------------------------------------------- */
+
+    @Test
+    void triggerSvcNri_validRefNo28_success() throws Exception {
+        CustomerPd pd = new CustomerPd();
+        pd.setOnboardingRefNo("123");
+
+        when(customerPdRepository.findById(any()))
+                .thenReturn(Optional.of(pd));
+
+        String result = triggerNRI.triggerSvcNri(
+                "1234567890123456789012345678", "WEB");
+
+        assertEquals("SUCCESS", result);
+    }
+
+    @Test
+    void triggerSvcNri_invalidRefNo28_throwsException() {
+        assertThrows(ServiceBusinessException.class, () ->
+                triggerNRI.triggerSvcNri(
+                        "INVALIDINVALIDINVALIDINVALID", "WEB"));
+    }
+
+    @Test
+    void triggerSvcNri_invalidRefNo25_throwsException() {
+        assertThrows(ServiceBusinessException.class, () ->
+                triggerNRI.triggerSvcNri(
+                        "1234567890123456789012345", "WEB"));
+    }
+
+    @Test
+    void triggerSvcNri_repositoryThrowsException() {
+        when(customerPdRepository.findById(any()))
+                .thenThrow(RuntimeException.class);
+
+        assertThrows(ServiceBusinessException.class, () ->
+                triggerNRI.triggerSvcNri(
+                        "1234567890123456789012345678", "WEB"));
+    }
+
+    /* -------------------------------------------------
+     * setValuesInUploadDoc() TEST CASES
+     * ------------------------------------------------- */
+
+    @Test
+    void setValuesInUploadDoc_customerNotFound() {
+        when(customerPdRepository.findById(any()))
+                .thenReturn(Optional.empty());
+
+        assertThrows(ServiceBusinessException.class, () ->
+                triggerNRI.setValuesInUploadDoc(
+                        "REF123",
+                        new ServiceBusinessException(),
+                        "WEB"));
+    }
+
+    @Test
+    void setValuesInUploadDoc_success() throws Exception {
+        CustomerPd pd = new CustomerPd();
+        pd.setOnboardingRefNo("REF123");
+
+        when(customerPdRepository.findById("REF123"))
+                .thenReturn(Optional.of(pd));
+
+        String result = triggerNRI.setValuesInUploadDoc(
+                "REF123",
+                new ServiceBusinessException(),
+                "WEB");
+
+        assertEquals("SUCCESS", result);
+    }
+
+    @Test
+    void setValuesInUploadDoc_saveCalled() throws Exception {
+        CustomerPd pd = new CustomerPd();
+        pd.setOnboardingRefNo("REF123");
+
+        when(customerPdRepository.findById(any()))
+                .thenReturn(Optional.of(pd));
+
+        triggerNRI.setValuesInUploadDoc(
+                "REF123",
+                new ServiceBusinessException(),
+                "WEB");
+
+        verify(edmsUploadDocRepo, times(1))
+                .save(any(EdmsUploadDoc.class));
+    }
+
+    @Test
+    void setValuesInUploadDoc_createEkycExceptionHandled() throws Exception {
+        CustomerPd pd = new CustomerPd();
+        pd.setOnboardingRefNo("REF123");
+
+        when(customerPdRepository.findById(any()))
+                .thenReturn(Optional.of(pd));
+
+        doThrow(new JSONException("error"))
+                .when(commonEkycPdf)
+                .createEkycPdf(any(), any());
+
+        assertDoesNotThrow(() ->
+                triggerNRI.setValuesInUploadDoc(
+                        "REF123",
+                        new ServiceBusinessException(),
+                        "WEB"));
+    }
+
+    /* -------------------------------------------------
+     * createEkycCombineVkyc() TEST CASES
+     * ------------------------------------------------- */
+
+    @Test
+    void createEkycCombineVkyc_validChannel_pdfCreated() throws Exception {
+        when(commonEkycPdf.createEkycPdf(any(), any()))
+                .thenReturn("PDFDATA");
+
+        triggerNRI.createEkycCombineVkyc("REF123", "Y2");
+
+        verify(commonEkycPdf, atLeastOnce())
+                .createEkycPdf(any(), any());
+    }
+
+    @Test
+    void createEkycCombineVkyc_uploadSuccess() throws Exception {
+        when(commonEkycPdf.createEkycPdf(any(), any()))
+                .thenReturn("PDFDATA");
+
+        when(uploadDocumentSvc.documentUpload(any(), any(), any(), any(), any()))
+                .thenReturn("SUCCESS");
+
+        triggerNRI.createEkycCombineVkyc("REF123", "Y2");
+
+        verify(uploadDocumentSvc, atLeastOnce())
+                .documentUpload(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void createEkycCombineVkyc_uploadThrowsException() throws Exception {
+        when(commonEkycPdf.createEkycPdf(any(), any()))
+                .thenReturn("PDFDATA");
+
+        when(uploadDocumentSvc.documentUpload(any(), any(), any(), any(), any()))
+                .thenThrow(new ServiceBusinessException());
+
+        assertDoesNotThrow(() ->
+                triggerNRI.createEkycCombineVkyc("REF123", "Y2"));
+    }
+
+    @Test
+    void createEkycCombineVkyc_passportPathsEmpty() throws Exception {
+        when(edmsDocDetailsRepo
+                .findFilePathsByRefNoAndTwoDocIdsOrderByDocId(any(), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        assertDoesNotThrow(() ->
+                triggerNRI.createEkycCombineVkyc("REF123", "Y2"));
+    }
+
+    @Test
+    void createEkycCombineVkyc_commonPdfThrowsException() throws Exception {
+        when(commonEkycPdf.createEkycPdf(any(), any()))
+                .thenThrow(new ServiceException("error"));
+
+        assertDoesNotThrow(() ->
+                triggerNRI.createEkycCombineVkyc("REF123", "Y2"));
+    }
+
+    /* -------------------------------------------------
+     * uploadDocumentIfPresent() indirectly covered
+     * ------------------------------------------------- */
+
+    @Test
+    void uploadDocumentIfPresent_pdfNull() throws Exception {
+        when(commonEkycPdf.createEkycPdf(any(), any()))
+                .thenReturn(null);
+
+        assertDoesNotThrow(() ->
+                triggerNRI.createEkycCombineVkyc("REF123", "Y2"));
+    }
+
+    @Test
+    void uploadDocumentIfPresent_pdfApplicantNotFound() throws Exception {
+        when(commonEkycPdf.createEkycPdf(any(), any()))
+                .thenReturn("APPLICANT_DATA_NOT_FOUND");
+
+        assertDoesNotThrow(() ->
+                triggerNRI.createEkycCombineVkyc("REF123", "Y2"));
+    }
+
+    @Test
+    void uploadDocumentIfPresent_pdfAadharNotFound() throws Exception {
+        when(commonEkycPdf.createEkycPdf(any(), any()))
+                .thenReturn("AADHAR_DATA_NOT_FOUND");
+
+        assertDoesNotThrow(() ->
+                triggerNRI.createEkycCombineVkyc("REF123", "Y2"));
+    }
+}
+
+
