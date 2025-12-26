@@ -228,6 +228,171 @@ public class DocValidationUtility {
 }
 
 
+++
+package com.sbi.yono.document.savingsaccount.edms.utility;
+
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.DcmntReqMstrRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsDocDetailsRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsUploadDocRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsUploadDoc;
+import com.tcs.techbone.logger.FLogger;
+
+@Service
+public class DocValidationUtility {
+
+    private EdmsDocDetailsRepo edmsDocDtlsRepo;
+    private DcmntReqMstrRepo dcmntReqMstrRepo;
+    private EdmsUploadDocRepo edmsUploadDocRepo;
+
+    public DocValidationUtility(
+            EdmsDocDetailsRepo edmsDocDtlsRepo,
+            DcmntReqMstrRepo dcmntReqMstrRepo,
+            EdmsUploadDocRepo edmsUploadDocRepo) {
+
+        this.edmsDocDtlsRepo = edmsDocDtlsRepo;
+        this.dcmntReqMstrRepo = dcmntReqMstrRepo;
+        this.edmsUploadDocRepo = edmsUploadDocRepo;
+    }
+
+    public boolean validateDocWithRefno(String refNo) {
+
+        try {
+            Optional<List<EdmsDocDetails>> allDtlsForRefnoOptional =
+                    edmsDocDtlsRepo.findBycompositeKeysRefNo(refNo);
+
+            Optional<EdmsUploadDoc> edmsUploadDocOptional =
+                    edmsUploadDocRepo.findByRefNoAndUploadStatus(refNo, false);
+
+            if (allDtlsForRefnoOptional.isEmpty() || edmsUploadDocOptional.isEmpty()) {
+                return false;
+            }
+
+            EdmsUploadDoc edmsUploadDoc = edmsUploadDocOptional.get();
+            List<EdmsDocDetails> allDtlsForRefno = allDtlsForRefnoOptional.get();
+
+            String channelId = edmsUploadDoc.getChannelId();
+            String getRequiredDoc = dcmntReqMstrRepo.getAccountCnstValue(channelId);
+
+            if (getRequiredDoc == null || getRequiredDoc.isEmpty()) {
+                return false;
+            }
+
+            ObjectMapper objectMapper = new ObjectMapper();
+            List<String> docList;
+
+            Map<String, Object> docMap = objectMapper.readValue(getRequiredDoc, Map.class);
+            docList = (List<String>) docMap.get("doc");
+
+            if (docList == null || docList.isEmpty()) {
+                return false;
+            }
+
+            Collections.sort(docList);
+
+            // keeping your logic, but guarded
+            if (!docList.isEmpty()) {
+                docList.remove(0);
+            }
+
+            return validateWithDtlsChannelList(
+                    edmsUploadDoc,
+                    allDtlsForRefno,
+                    docList,
+                    channelId
+            );
+
+        } catch (JsonProcessingException e) {
+
+            FLogger.error(
+                    Constants.TIER_NAME,
+                    this.getClass().getName(),
+                    "validateDocWithRefno",
+                    ExceptionUtils.getStackTrace(e)
+            );
+            return false;
+
+        } catch (Exception e) {
+
+            FLogger.error(
+                    Constants.TIER_NAME,
+                    this.getClass().getName(),
+                    "validateDocWithRefno",
+                    ExceptionUtils.getStackTrace(e)
+            );
+            return false;
+        }
+    }
+
+    public boolean validateWithDtlsChannelList(
+            EdmsUploadDoc edmsUploadDoc,
+            List<EdmsDocDetails> allDtlsForRefno,
+            List<String> docList,
+            String channelId) {
+
+        List<String> missingInNfs = new ArrayList<>();
+        List<String> missingInDtls = new ArrayList<>();
+
+        // ---------------- STEP 1: DTLS → NFS ----------------
+        for (EdmsDocDetails doc : allDtlsForRefno) {
+
+            String filePath = doc.getFilePath();
+            String docName = doc.getDocEdmsMap();
+
+            if (filePath == null || filePath.trim().isEmpty()
+                    || !Files.exists(Paths.get(filePath.replace("\\", "/")))) {
+
+                missingInNfs.add(docName);
+            }
+        }
+
+        // ---------------- STEP 2: MASTER → DTLS ----------------
+        Set<String> uploadedDocs = new HashSet<>();
+        for (EdmsDocDetails doc : allDtlsForRefno) {
+            if (doc.getDocEdmsMap() != null) {
+                uploadedDocs.add(doc.getDocEdmsMap().toUpperCase());
+            }
+        }
+
+        for (String requiredDoc : docList) {
+            if (!uploadedDocs.contains(requiredDoc.toUpperCase())) {
+                missingInDtls.add(requiredDoc);
+            }
+        }
+
+        // ---------------- FINAL RESULT ----------------
+        if (!missingInNfs.isEmpty() || !missingInDtls.isEmpty()) {
+
+            FLogger.info(
+                    Constants.TIER_NAME,
+                    this.getClass().getName(),
+                    "validateWithDtlsChannelList",
+                    "MissingInNfs=" + missingInNfs + ", MissingInDtls=" + missingInDtls
+            );
+
+            return false;
+        }
+
+        return true;
+    }
+}
+
 
 
 
