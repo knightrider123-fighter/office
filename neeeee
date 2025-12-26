@@ -1,0 +1,16 @@
+SELECT ref_no, doc_id, doc_edms_map, file_name, id_no, ckyc_no, cersai_flag, archival_flag, doc_type, scanned_dt, doc_code, doc_category, doc_identifier, doc_expiry_date, cmmnts, file_path, crtd_by, updtd_by, crtd_dt, updtd_dt
+	FROM yono_dcmnt.edms_doc_dtls
+
+SELECT ref_no, channel_id, no_of_poa, no_of_poi, no_of_kyc, no_of_others, upload_status, response_status, doc_uplaod_path, crtd_by, updtd_by, crtd_dt, updtd_dt
+		FROM yono_dcmnt.edms_upload_doc 
+
+SELECT ref_no, cif, accnt_no, ppf_accnt_no, vrtl_card_nm, physcl_card_nm, ntwrk_typ_physcl_card, ntwrk_typ_vrtl_card, jrnl_nmbr_nominee, jrnl_nmbr_physcl, jrnl_nmbr_sms_alert, jrnl_nmbr_tmp_add, amlock_dtls, jrnl_nmbrs_chq, upi_id, jrnl_nmbr_ckyc, rghts_lvl, jrny, crtd_dt, updtd_dt, crtd_by, updtd_by
+	FROM yono_accnt.accnt_onbrdng_status;
+
+
+	@Override
+	public List<EtbTriggerDto> read() throws UnexpectedInputException, ParseException, ServiceBusinessException {
+		if (finished) {
+			return null;
+		}
+		String sql = new StringBuilder().append(" ").append(pagesize).toString();
