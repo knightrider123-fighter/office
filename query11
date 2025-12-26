@@ -22,6 +22,70 @@ name of file is like SBIY2NRI2535812122870pOqphq5_KYC_2.jpeg
 SBIY2NRI2535812122870pOqphq5_KYC_1_36.pdf ,SBIY2NRI2535812122870pOqphq5_COMBINE.pdf
 
 
+package com.sbi.yono.document.savingsaccount.edms.utility;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.DcmntReqMstrRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsDocDetailsRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsUploadDocRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsUploadDoc;
+
+@Service
+public class DocValidationUtility {
+
+	private EdmsDocDetailsRepo edmsDocDtlsRepo;
+	private DcmntReqMstrRepo dcmntReqMstrRepo;
+	private EdmsUploadDocRepo edmsUploadDocRepo;
+
+	public DocValidationUtility(EdmsDocDetailsRepo edmsDocDtlsRepo, DcmntReqMstrRepo dcmntReqMstrRepo,
+			EdmsUploadDocRepo edmsUploadDocRepo) {
+		this.edmsDocDtlsRepo = edmsDocDtlsRepo;
+		this.dcmntReqMstrRepo = dcmntReqMstrRepo;
+		this.edmsUploadDocRepo = edmsUploadDocRepo;
+
+	}
+
+	public boolean validateDocWithRefno(String refNo) {
+		Optional<List<EdmsDocDetails>> allDtlsForRefnoOptional = edmsDocDtlsRepo.findBycompositeKeysRefNo(refNo);
+		Optional<EdmsUploadDoc> edmsUploadDocOptional = edmsUploadDocRepo.findByRefNoAndUploadStatus(refNo, false);
+		if(allDtlsForRefnoOptional.isPresent()&&edmsUploadDocOptional.isPresent()) {
+			EdmsUploadDoc edmsUploadDoc=edmsUploadDocOptional.get();
+			List<EdmsDocDetails> allDtlsForRefno=allDtlsForRefnoOptional.get();
+			
+			String channelId = edmsUploadDoc.getChannelId();
+			String getRequiredDoc = dcmntReqMstrRepo.getAccountCnstValue(channelId);
+			if(getRequiredDoc!=null) {
+				validateWithDtlsChannelList(edmsUploadDoc,allDtlsForRefno,getRequiredDoc,channelId);
+			}
+			
+			System.out.println(getRequiredDoc);
+			System.out.println(allDtlsForRefno);
+		}else {
+			
+		}
+		
+		
+		
+
+		return false;
+	}
+
+	public  boolean validateWithDtlsChannelList(EdmsUploadDoc edmsUploadDoc, List<EdmsDocDetails> allDtlsForRefno,
+			String getRequiredDoc, String channelId) {
+		// TODO Auto-generated method stub
+		
+		return false;
+	}
+
+}
+
+
+
 
 
 
