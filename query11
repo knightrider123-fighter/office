@@ -87,5 +87,124 @@ public class DocValidationUtility {
 
 
 
+_________
+package com.sbi.yono.document.savingsaccount.edms.utility;
+
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.springframework.stereotype.Service;
+
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.DcmntReqMstrRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsDocDetailsRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsUploadDocRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsUploadDoc;
+
+@Service
+public class DocValidationUtility {
+
+    private final EdmsDocDetailsRepo edmsDocDtlsRepo;
+    private final DcmntReqMstrRepo dcmntReqMstrRepo;
+    private final EdmsUploadDocRepo edmsUploadDocRepo;
+
+    public DocValidationUtility(
+            EdmsDocDetailsRepo edmsDocDtlsRepo,
+            DcmntReqMstrRepo dcmntReqMstrRepo,
+            EdmsUploadDocRepo edmsUploadDocRepo) {
+
+        this.edmsDocDtlsRepo = edmsDocDtlsRepo;
+        this.dcmntReqMstrRepo = dcmntReqMstrRepo;
+        this.edmsUploadDocRepo = edmsUploadDocRepo;
+    }
+
+    public boolean validateDocWithRefno(String refNo) {
+
+        Optional<List<EdmsDocDetails>> dtlsOpt =
+                edmsDocDtlsRepo.findBycompositeKeysRefNo(refNo);
+
+        Optional<EdmsUploadDoc> uploadOpt =
+                edmsUploadDocRepo.findByRefNoAndUploadStatus(refNo, false);
+
+        if (dtlsOpt.isEmpty() || uploadOpt.isEmpty()) {
+            return false;
+        }
+
+        EdmsUploadDoc uploadDoc = uploadOpt.get();
+        List<EdmsDocDetails> dtlsList = dtlsOpt.get();
+
+        String channelId = uploadDoc.getChannelId();
+        String docReqJson = dcmntReqMstrRepo.getAccountCnstValue(channelId);
+
+        if (docReqJson == null || docReqJson.isEmpty()) {
+            return false;
+        }
+
+        return validateWithDtlsChannelList(dtlsList, docReqJson);
+    }
+
+    public boolean validateWithDtlsChannelList(
+            List<EdmsDocDetails> dtlsList,
+            String docReqJson) {
+
+        List<String> missingInNfs = new ArrayList<>();
+        List<String> missingInDtls = new ArrayList<>();
+
+        // ---------------- STEP 1: DTLS → NFS ----------------
+        for (EdmsDocDetails doc : dtlsList) {
+
+            String filePath = doc.getFilePath();
+            String docName = doc.getDocEdmsMap();
+
+            if (filePath == null || filePath.trim().isEmpty()
+                    || !Files.exists(Paths.get(filePath.replace("\\", "/")))) {
+
+                missingInNfs.add(docName);
+            }
+        }
+
+        // ---------------- STEP 2: MASTER → DTLS ----------------
+        Set<String> uploadedDocs = new HashSet<>();
+        for (EdmsDocDetails doc : dtlsList) {
+            if (doc.getDocEdmsMap() != null) {
+                uploadedDocs.add(doc.getDocEdmsMap().toUpperCase());
+            }
+        }
+
+        JSONObject json = new JSONObject(docReqJson);
+        JSONArray requiredArray = json.getJSONArray("doc");
+
+        for (int i = 0; i < requiredArray.length(); i++) {
+            String requiredDoc = requiredArray.getString(i);
+            if (!uploadedDocs.contains(requiredDoc.toUpperCase())) {
+                missingInDtls.add(requiredDoc);
+            }
+        }
+
+        // ---------------- FINAL RESULT ----------------
+        if (!missingInNfs.isEmpty() || !missingInDtls.isEmpty()) {
+
+            // At this point you can:
+            // - insert into error table
+            // - log
+            // - throw exception
+            // - return details to caller
+
+            return false;
+        }
+
+        return true;
+    }
+}
+
+
+
 
 
