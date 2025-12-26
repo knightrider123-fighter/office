@@ -24,16 +24,24 @@ SBIY2NRI2535812122870pOqphq5_KYC_1_36.pdf ,SBIY2NRI2535812122870pOqphq5_COMBINE.
 
 package com.sbi.yono.document.savingsaccount.edms.utility;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
 import com.sbi.yono.document.savingsaccount.edms.edms.repo.DcmntReqMstrRepo;
 import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsDocDetailsRepo;
 import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsUploadDocRepo;
 import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
 import com.sbi.yono.document.savingsaccount.edms.entity.EdmsUploadDoc;
+import com.tcs.techbone.logger.FLogger;
 
 @Service
 public class DocValidationUtility {
@@ -57,10 +65,25 @@ public class DocValidationUtility {
 			EdmsUploadDoc edmsUploadDoc=edmsUploadDocOptional.get();
 			List<EdmsDocDetails> allDtlsForRefno=allDtlsForRefnoOptional.get();
 			
+			
 			String channelId = edmsUploadDoc.getChannelId();
 			String getRequiredDoc = dcmntReqMstrRepo.getAccountCnstValue(channelId);
+
+			
+			ObjectMapper objectMapper = new ObjectMapper();
+			List<String> docList = new ArrayList<>();
+			try {
+				Map<String, Object> docMap = objectMapper.readValue(getRequiredDoc, Map.class);
+				docList = (List<String>) docMap.get("doc");
+				Collections.sort(docList);
+				docList.remove(0);
+				
+			} catch (JsonProcessingException e) {
+				
+				return false;
+			}
 			if(getRequiredDoc!=null) {
-				validateWithDtlsChannelList(edmsUploadDoc,allDtlsForRefno,getRequiredDoc,channelId);
+				validateWithDtlsChannelList(edmsUploadDoc,allDtlsForRefno,docList,channelId);
 			}
 			
 			System.out.println(getRequiredDoc);
@@ -76,7 +99,7 @@ public class DocValidationUtility {
 	}
 
 	public  boolean validateWithDtlsChannelList(EdmsUploadDoc edmsUploadDoc, List<EdmsDocDetails> allDtlsForRefno,
-			String getRequiredDoc, String channelId) {
+			List<String> docList, String channelId) {
 		// TODO Auto-generated method stub
 		
 		return false;
