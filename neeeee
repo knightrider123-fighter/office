@@ -14,3 +14,44 @@ SELECT ref_no, cif, accnt_no, ppf_accnt_no, vrtl_card_nm, physcl_card_nm, ntwrk_
 			return null;
 		}
 		String sql = new StringBuilder().append(" ").append(pagesize).toString();
+
+
+
+______
+SELECT
+    d.ref_no,
+
+    ARRAY_AGG(d.file_path ORDER BY d.doc_edms_map)    AS file_paths,
+    ARRAY_AGG(d.doc_edms_map ORDER BY d.doc_edms_map) AS doc_names,
+
+    u.channel_id,
+    u.upload_status,
+    u.doc_uplaod_path,
+
+    a.cif,
+    a.accnt_no,
+    a.ppf_accnt_no,
+    a.upi_id,
+    a.jrny
+
+FROM yono_dcmnt.edms_doc_dtls d
+
+JOIN yono_dcmnt.edms_upload_doc u
+     ON d.ref_no = u.ref_no
+    AND u.upload_status = false
+
+LEFT JOIN yono_accnt.accnt_onbrdng_status a
+       ON d.ref_no = a.ref_no
+
+GROUP BY
+    d.ref_no,
+    u.channel_id,
+    u.upload_status,
+    u.doc_uplaod_path,
+    a.cif,
+    a.accnt_no,
+    a.ppf_accnt_no,
+    a.upi_id,
+    a.jrny
+
+ORDER BY d.ref_no;
