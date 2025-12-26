@@ -18,6 +18,9 @@ SELECT ref_id, channel_id, doc_req, crtd_by, updtd_by, crtd_dt, updtd_dt
 
 this is my dtls and req table and one more i have all this doc in my NFS/ Local storage i want to create an utility for the same to for validation give true or false  
 
+name of file is like SBIY2NRI2535812122870pOqphq5_KYC_2.jpeg
+SBIY2NRI2535812122870pOqphq5_KYC_1_36.pdf ,SBIY2NRI2535812122870pOqphq5_COMBINE.pdf
+
 
 
 
