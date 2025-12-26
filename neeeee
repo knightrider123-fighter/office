@@ -55,3 +55,47 @@ GROUP BY
     a.jrny
 
 ORDER BY d.ref_no;
+
+
+
+
+qqqqq
+SELECT
+    u.ref_no,
+
+    ARRAY_AGG(d.file_path ORDER BY d.doc_edms_map)    AS file_paths,
+    ARRAY_AGG(d.doc_edms_map ORDER BY d.doc_edms_map) AS doc_names,
+
+    u.channel_id,
+    u.upload_status,
+    u.doc_uplaod_path,
+
+    a.cif,
+    a.accnt_no,
+    a.ppf_accnt_no,
+    a.upi_id,
+    a.jrny
+
+FROM yono_dcmnt.edms_upload_doc u
+
+INNER JOIN yono_dcmnt.edms_doc_dtls d
+        ON u.ref_no = d.ref_no
+
+LEFT JOIN yono_accnt.accnt_onbrdng_status a
+       ON u.ref_no = a.ref_no
+
+WHERE u.upload_status = false
+  AND u.channel_id IN ('Y2EDNRI', 'Y2NRI', 'Y2ETB')   -- configurable
+
+GROUP BY
+    u.ref_no,
+    u.channel_id,
+    u.upload_status,
+    u.doc_uplaod_path,
+    a.cif,
+    a.accnt_no,
+    a.ppf_accnt_no,
+    a.upi_id,
+    a.jrny
+
+ORDER BY u.ref_no;
