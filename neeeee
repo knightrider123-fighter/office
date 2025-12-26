@@ -17,55 +17,18 @@ SELECT ref_no, cif, accnt_no, ppf_accnt_no, vrtl_card_nm, physcl_card_nm, ntwrk_
 
 
 
-______
-SELECT
-    d.ref_no,
 
-    ARRAY_AGG(d.file_path ORDER BY d.doc_edms_map)    AS file_paths,
-    ARRAY_AGG(d.doc_edms_map ORDER BY d.doc_edms_map) AS doc_names,
-
-    u.channel_id,
-    u.upload_status,
-    u.doc_uplaod_path,
-
-    a.cif,
-    a.accnt_no,
-    a.ppf_accnt_no,
-    a.upi_id,
-    a.jrny
-
-FROM yono_dcmnt.edms_doc_dtls d
-
-JOIN yono_dcmnt.edms_upload_doc u
-     ON d.ref_no = u.ref_no
-    AND u.upload_status = false
-
-LEFT JOIN yono_accnt.accnt_onbrdng_status a
-       ON d.ref_no = a.ref_no
-
-GROUP BY
-    d.ref_no,
-    u.channel_id,
-    u.upload_status,
-    u.doc_uplaod_path,
-    a.cif,
-    a.accnt_no,
-    a.ppf_accnt_no,
-    a.upi_id,
-    a.jrny
-
-ORDER BY d.ref_no;
-
-
-
-
-qqqqq
-SELECT
+	SELECT ref_id, channel_id, doc_req, crtd_by, updtd_by, crtd_dt, updtd_dt
+	FROM yono_dcmnt.dcmnt_req_mstr;
+	
+	
+	SELECT
     u.ref_no,
 
     ARRAY_AGG(d.file_path ORDER BY d.doc_edms_map)    AS file_paths,
     ARRAY_AGG(d.doc_edms_map ORDER BY d.doc_edms_map) AS doc_names,
-
+	m.doc_req,
+	
     u.channel_id,
     u.upload_status,
     u.doc_uplaod_path,
@@ -83,9 +46,12 @@ INNER JOIN yono_dcmnt.edms_doc_dtls d
 
 LEFT JOIN yono_accnt.accnt_onbrdng_status a
        ON u.ref_no = a.ref_no
+INNER JOIN yono_dcmnt.dcmnt_req_mstr m
+on m.channel_id = u.channel_id
+	   
 
 WHERE u.upload_status = false
-  AND u.channel_id IN ('Y2EDNRI', 'Y2NRI', 'Y2ETB')   -- configurable
+--   AND u.channel_id IN ('Y2NDSSA', 'Y2NDSCA', 'Y2NBNSA')   -- configurable
 
 GROUP BY
     u.ref_no,
