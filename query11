@@ -1,0 +1,24 @@
+
+	SELECT ref_no, doc_id, doc_edms_map, file_name, id_no, ckyc_no, cersai_flag, archival_flag, doc_type, scanned_dt, doc_code, doc_category, doc_identifier, doc_expiry_date, cmmnts, file_path, crtd_by, updtd_by, crtd_dt, updtd_dt
+	FROM yono_dcmnt.edms_doc_dtls where ref_no='SBIY2NRI2535812122870pOqphq5';
+
+
+"SBIY2NRI2535812122870pOqphq5"	"DC_028"	"Visa"	"SBIY2NRI2535812122870pOqphq5_Visa.jpeg"		0	false	true	"0"	"2025-12-24 12:09:21.948196+05:30"	"0"	"0"	"0"			"/opt/Documents/SBIY2NRI2535812122870pOqphq5/SBIY2NRI2535812122870pOqphq5_Visa.jpeg"	"SYSTEM"	"SYSTEM"	"2025-12-24 12:09:21.948212"	"2025-12-24 12:09:21.948213"
+"SBIY2NRI2535812122870pOqphq5"	"DC_004"	"Photo"	"SBIY2NRI2535812122870pOqphq5_Captured_Photo.jpeg"		0	false	true	"2"	"2025-12-24 12:09:29.492106+05:30"	"2"	"2"	"2"			"/opt/Documents/SBIY2NRI2535812122870pOqphq5/SBIY2NRI2535812122870pOqphq5_Captured_Photo.jpeg"	"SYSTEM"	"SYSTEM"	"2025-12-24 12:09:29.492119"	"2025-12-24 12:09:29.492119"
+"SBIY2NRI2535812122870pOqphq5"	"DC_011"	"KYC_2"	"SBIY2NRI2535812122870pOqphq5_KYC_2.jpeg"		0	false	true	"5"	"2025-12-24 12:08:49.891635+05:30"	"5"	"5"	"5"		"fc7d63a7-9450-4aea-be17-5ee2bd224c60"	"/opt/Documents/SBIY2NRI2535812122870pOqphq5/SBIY2NRI2535812122870pOqphq5_KYC_2.jpeg"	"SYSTEM"	"SYSTEM"	"2025-12-24 12:08:49.891651"	"2025-12-24 12:08:49.891656"
+"SBIY2NRI2535812122870pOqphq5"	"DC_012"	"KYC_3"	"SBIY2NRI2535812122870pOqphq5_KYC_3.jpeg"		0	false	true	"5"	"2025-12-24 12:09:00.034382+05:30"	"5"	"5"	"5"		"fc7d63a7-9450-4aea-be17-5ee2bd224c60"	"/opt/Documents/SBIY2NRI2535812122870pOqphq5/SBIY2NRI2535812122870pOqphq5_KYC_3.jpeg"	"SYSTEM"	"SYSTEM"	"2025-12-24 12:09:00.034396"	"2025-12-24 12:09:00.034396"
+"SBIY2NRI2535812122870pOqphq5"	"DC_024"	"COMBINE"	"SBIY2NRI2535812122870pOqphq5_COMBINE.pdf"		0	false	true	"98"	"2025-12-24 15:53:15.031586+05:30"	"98"	"98"	"98"			"/opt\Documents\SBIY2NRI2535812122870pOqphq5\SBIY2NRI2535812122870pOqphq5_COMBINE.pdf"	"SYSTEM"	"SYSTEM"	"2025-12-24 15:53:15.031586"	"2025-12-25 14:43:52.642941"
+
+
+SELECT ref_id, channel_id, doc_req, crtd_by, updtd_by, crtd_dt, updtd_dt
+	FROM yono_dcmnt.dcmnt_req_mstr;
+
+"RF_022"	"Y2EDNRI"	"{""doc"": [""4"", ""AOF"", ""Combine"", ""TNC"", ""CIDF"", ""Photo"", ""SIGN"", ""Sign""]}"	"SYSTEM"	"SYSTEM"	"2025-12-25 12:33:17.970231"	"2025-12-25 12:33:17.970231"
+
+
+this is my dtls and req table and one more i have all this doc in my NFS/ Local storage i want to create an utility for the same to for validation give true or false  
+
+
+
+
+
