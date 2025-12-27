@@ -18,6 +18,175 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.sbi.yono.document.savingsaccount.edms.bean.EDMSResponse;
+import com.sbi.yono.document.savingsaccount.edms.bean.RequestBeanNRI;
+import com.sbi.yono.document.savingsaccount.edms.nrinroupload.NriMainClassSvc;
+import com.sbi.yono.document.savingsaccount.edms.upload.Audit;
+import com.sbi.yono.document.savingsaccount.edms.upload.CallApi;
+import com.sbi.yono.document.savingsaccount.edms.utility.LoggingAspect;
+
+@ExtendWith(MockitoExtension.class)
+class NriMainClassSvcUploadDocsTest {
+
+    @Mock
+    private CallApi callApi;   // 🔥 MUST be mocked
+
+    @Mock
+    private Audit audit;
+
+    @Mock
+    private LoggingAspect loggingAspect;
+
+    @Spy
+    @InjectMocks
+    private NriMainClassSvc service;
+
+    // --------------------------------------------------
+    // 🔑 CRITICAL FIX: Inject mocked CallApi
+    // --------------------------------------------------
+    @BeforeEach
+    void injectMockCallApi() throws Exception {
+        Field field = NriMainClassSvc.class.getDeclaredField("callApi");
+        field.setAccessible(true);
+        field.set(service, callApi);
+    }
+
+    // ==================================================
+    // 1️⃣ SUCCESS FLOW
+    // ==================================================
+    @Test
+    void uploadDocs_success_shouldNotTriggerCipher() {
+
+        RequestBeanNRI bean = new RequestBeanNRI();
+
+        EDMSResponse response = new EDMSResponse();
+        response.setResponseCode("200");
+
+        // Mask request & response
+        doReturn(new HashMap<>())
+                .doReturn(new HashMap<>())
+                .when(loggingAspect).maskInstanceOfMap(any());
+
+        // Mock EDMS API call
+        doReturn(response)
+                .when(callApi)
+                .callEDMSAPI(
+                        any(),
+                        anyString(),
+                        any(PublicKey.class),
+                        any(PrivateKey.class),
+                        anyString());
+
+        EDMSResponse result = service.uploadDocs(
+                bean,
+                "http://edms/doc",
+                mock(PrivateKey.class),
+                mock(PublicKey.class),
+                "Y2ND",
+                "REF123");
+
+        assertNotNull(result);
+        assertEquals("200", result.getResponseCode());
+
+        verify(callApi).callEDMSAPI(
+                eq(bean),
+                eq("http://edms/doc"),
+                any(PublicKey.class),
+                any(PrivateKey.class),
+                eq("Y2ND"));
+
+        verify(audit).performAudit(
+                eq("REF123"),
+                eq(bean),
+                eq(response),
+                eq("http://edms/doc"),
+                eq("edms_doc_upload"));
+    }
+
+    // ==================================================
+    // 2️⃣ EDMS API RETURNS NULL
+    // ==================================================
+    @Test
+    void uploadDocs_whenApiReturnsNull_shouldAuditWithNullResponse() {
+
+        RequestBeanNRI bean = new RequestBeanNRI();
+
+        doReturn(new HashMap<>())
+                .when(loggingAspect).maskInstanceOfMap(any());
+
+        doReturn(null)
+                .when(callApi)
+                .callEDMSAPI(any(), any(), any(), any(), any());
+
+        EDMSResponse result = service.uploadDocs(
+                bean,
+                "http://edms/doc",
+                mock(PrivateKey.class),
+                mock(PublicKey.class),
+                "Y2ND",
+                "REF999");
+
+        assertNull(result);
+
+        verify(audit).performAudit(
+                eq("REF999"),
+                eq(bean),
+                isNull(),
+                eq("http://edms/doc"),
+                eq("edms_doc_upload"));
+    }
+
+    // ==================================================
+    // 3️⃣ EMPTY MASK MAP (EDGE CASE)
+    // ==================================================
+    @Test
+    void uploadDocs_whenMaskingReturnsEmpty_shouldStillWork() {
+
+        RequestBeanNRI bean = new RequestBeanNRI();
+
+        EDMSResponse response = new EDMSResponse();
+        response.setResponseCode("200");
+
+        doReturn(new HashMap<>())
+                .when(loggingAspect).maskInstanceOfMap(any());
+
+        doReturn(response)
+                .when(callApi)
+                .callEDMSAPI(any(), any(), any(), any(), any());
+
+        EDMSResponse result = service.uploadDocs(
+                bean,
+                "url",
+                mock(PrivateKey.class),
+                mock(PublicKey.class),
+                "CH",
+                "REF");
+
+        assertEquals("200", result.getResponseCode());
+    }
+}
+
+
+ssses
+package com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.lang.reflect.Field;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.util.HashMap;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sbi.yono.document.savingsaccount.edms.bean.EDMSResponse;
 import com.sbi.yono.document.savingsaccount.edms.bean.ReqBean;
 import com.sbi.yono.document.savingsaccount.edms.nrinroupload.NriMainClassSvc;
 import com.sbi.yono.document.savingsaccount.edms.upload.Audit;
