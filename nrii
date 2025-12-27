@@ -1,0 +1,535 @@
+package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
+
+import java.io.Serializable;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.cert.X509Certificate;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import com.google.gson.Gson;
+import com.sbi.yono.document.savingsaccount.edms.bean.EDMSResponse;
+import com.sbi.yono.document.savingsaccount.edms.bean.ReqBean;
+import com.sbi.yono.document.savingsaccount.edms.bean.RequestBeanETB;
+import com.sbi.yono.document.savingsaccount.edms.bean.RequestBeanNRI;
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.AccountOnbrdngStatusRepository;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.CustomerPdRepository;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsDocDetailsRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsUploadDocRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.MkrChckrDtlsRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.NriAccntOnbrdingRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.AccntOnbrdngStatus;
+import com.sbi.yono.document.savingsaccount.edms.entity.CustomerPd;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsUploadDoc;
+import com.sbi.yono.document.savingsaccount.edms.entity.NriAccntOnbrdng;
+import com.sbi.yono.document.savingsaccount.edms.rekycupload.ReKycMainClassSvc;
+import com.sbi.yono.document.savingsaccount.edms.rekycupload.ReKycRequestBean;
+import com.sbi.yono.document.savingsaccount.edms.rekycupload.RekycUploadConstants;
+import com.sbi.yono.document.savingsaccount.edms.upload.Audit;
+import com.sbi.yono.document.savingsaccount.edms.upload.CallApi;
+import com.sbi.yono.document.savingsaccount.edms.upload.EdmsRequUrl;
+import com.sbi.yono.document.savingsaccount.edms.uploaddoc.UploadDocumentSvc;
+import com.sbi.yono.document.savingsaccount.edms.utility.CmnParamsConst;
+import com.sbi.yono.document.savingsaccount.edms.utility.Encryption;
+import com.sbi.yono.document.savingsaccount.edms.utility.LoggingAspect;
+import com.sbi.yono.document.savingsaccount.edms.utility.SaveEdmsResponse;
+import com.sbi.yono.document.savingsaccount.edms.utility.ValidateDocuments;
+import com.tcs.techbone.channel.global.reader.GlobalConfigPropertiesReader;
+import com.tcs.techbone.command.vo.ParameterType;
+import com.tcs.techbone.cryptography.kms.service.KeyManagementService;
+import com.tcs.techbone.exception.ServiceBusinessException;
+import com.tcs.techbone.exception.TechboneKMSException;
+import com.tcs.techbone.logger.FLogger;
+import com.tcs.techbone.service.BaseServiceFactory;
+import com.tcs.techbone.service.vo.IServiceDefinition;
+
+@Service
+public class NriMainClassSvc extends BaseServiceFactory implements Serializable {
+ 
+	String thisClass = NriUploadConstant.ETB_MAIN_CLASS_SVC;
+	private static final long serialVersionUID = 1L;
+	private transient MkrChckrDtlsRepo mkrChckrDtlsRepo;
+	private final transient EdmsUploadDocRepo docRepoEdmsUploadDocRepo;
+	private final transient EdmsDocDetailsRepo edmsDocDetailsRepo;
+	private final transient UploadDocumentSvc uploadDocumentSvc;
+	private final transient AccountOnbrdngStatusRepository accountOnbrdngStatusRepository;
+	private final transient NriAccntOnbrdingRepo nriAccntOnbrdingRepo;
+
+	private final transient CustomerPdRepository customerPdRepository;
+	private final transient SaveEdmsResponse saveResp;
+	private final transient ValidateDocuments validateDocuments;
+	private transient NriMainClassUtility mainClassUtility = new NriMainClassUtility();
+	private transient CallApi callApi = new CallApi();
+	private transient LoggingAspect loggingAspect = new LoggingAspect();
+	private Audit audit;
+
+	private String edmsServer = (String) GlobalConfigPropertiesReader.getInstance()
+			.getPropertyById(NriUploadConstant.EDMS_SERVER);
+	private String vkycDoc = (String) GlobalConfigPropertiesReader.getInstance()
+			.getPropertyById(NriUploadConstant.EDMS_VKYC_DOC);
+	private String ckycDoc = (String) GlobalConfigPropertiesReader.getInstance()
+			.getPropertyById(NriUploadConstant.EDMS_CKYC_DOC);
+	private String vkycVid = (String) GlobalConfigPropertiesReader.getInstance().getPropertyById("edms-VKYC-VIDEO");
+	private String path2 = edmsServer + vkycDoc;
+	private String path4 = edmsServer + ckycDoc;
+	private String path6 = edmsServer + vkycVid;
+
+	@Value("${statusflag}")
+	public String statusflag;
+
+	public void setStatusflag(String statusflag) {
+		this.statusflag = statusflag;
+	}
+
+	public NriMainClassSvc(EdmsUploadDocRepo docRepoEdmsUploadDocRepo, EdmsDocDetailsRepo edmsDocDetailsRepo,
+			MkrChckrDtlsRepo mkrChckrDtlsRepo, UploadDocumentSvc uploadDocumentSvc, Audit audit,
+			AccountOnbrdngStatusRepository accountOnbrdngStatusRepository, CustomerPdRepository customerPdRepository,
+			SaveEdmsResponse saveResp, ValidateDocuments validateDocuments, NriAccntOnbrdingRepo nriAccntOnbrdingRepo) {
+		this.docRepoEdmsUploadDocRepo = docRepoEdmsUploadDocRepo;
+		this.edmsDocDetailsRepo = edmsDocDetailsRepo;
+		this.mkrChckrDtlsRepo = mkrChckrDtlsRepo;
+		this.uploadDocumentSvc = uploadDocumentSvc;
+		this.audit = audit;
+		this.accountOnbrdngStatusRepository = accountOnbrdngStatusRepository;
+		this.nriAccntOnbrdingRepo = nriAccntOnbrdingRepo;
+		this.customerPdRepository = customerPdRepository;
+		this.validateDocuments = validateDocuments;
+		this.saveResp = saveResp;
+	}
+
+	/**
+	 * Method Name: edmsCall Description: This method is scheduled to run every hour
+	 * and is responsible for uploading documents data for approved customer
+	 * onboarding records.
+	 * 
+	 * @param list
+	 */
+	public void edmsCall(List<EdmsUploadDoc> list) {
+		String thisMethod = NriUploadConstant.EDMS_CALL;
+		String currentLead;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		if (!list.isEmpty()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.LIST_OF_UPLOAD_STATUS_IS_NOT_EMPTY);
+			for (EdmsUploadDoc edmsUploadDoc : list) {
+				currentLead = edmsUploadDoc.getRefNo();
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						NriUploadConstant.REFERENCE_NUMBER_IS + currentLead);
+				Optional<List<EdmsDocDetails>> edmsDocDetailsValue = edmsDocDetailsRepo
+						.findBycompositeKeysRefNo(edmsUploadDoc.getRefNo());
+				if (edmsDocDetailsValue.isPresent()) {
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+							NriUploadConstant.REFERENCE_NUMBER_IS_PRESENT_IN_DOC_DTLS_TABLE);
+					List<EdmsDocDetails> documents = edmsDocDetailsValue.get();
+					try {
+						FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+								NriUploadConstant.ADD_DOC_BY_LEAD_ID_IS_NOT_EMPTY);
+						FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+						addDocByLeadId(currentLead, documents, edmsUploadDoc);
+					} catch (ServiceBusinessException e) {
+						FLogger.error(Constants.TIER_NAME, NriMainClassSvc.class.getSimpleName(), thisMethod,
+								NriUploadConstant.ADD_DOC_BY_LEAD_ID_IS_NOT_EMPTY2 + ExceptionUtils.getStackTrace(e));
+					}
+				}
+			}
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+	}
+
+	/**
+	 * Method Name: addDocByLeadId
+	 * 
+	 * @param currentLead
+	 * @param documents
+	 * @param edmsUploadDoc
+	 * @throws ServiceBusinessException
+	 */
+	public void addDocByLeadId(String currentLead, List<EdmsDocDetails> documents, EdmsUploadDoc edmsUploadDoc)
+			throws ServiceBusinessException {
+		String thisMethod = NriUploadConstant.ADD_DOC_BY_LEAD_ID;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		String refNo = edmsUploadDoc.getRefNo();
+		Optional<CustomerPd> customerPdOptional = customerPdRepository.findById(refNo);
+		CustomerPd customerPdData = null;
+		if (customerPdOptional.isPresent()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.CUSTOMER_PD_OPTIONAL_PRESENT);
+			customerPdData = customerPdOptional.get();
+		}
+		Long ckycNumber = 0L;
+		if (customerPdData != null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.CKYC_NUMBER_PRESENT);
+			ckycNumber = customerPdData.getCkycNo();
+		}
+		String channelId = edmsUploadDoc.getChannelId();
+
+		Optional<NriAccntOnbrdng> accountOnboardingStatusOptional = nriAccntOnbrdingRepo.findById(refNo);
+
+		NriAccntOnbrdng accountOnboardingStatusData = null;
+		if (accountOnboardingStatusOptional.isPresent()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.ACCOUNT_ONBOARDING_STATUS_OPTIONAL_PRESENT);
+			accountOnboardingStatusData = accountOnboardingStatusOptional.get();
+		}
+		String cif = NriUploadConstant.EMPTY_STRING;
+		if (accountOnboardingStatusData != null && accountOnboardingStatusData.getCif() != null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.ACCOUNT_ONBOARDING_STATUS_DATA_PRESENT);
+			cif = accountOnboardingStatusData.getCif().toString();
+		}
+		edmsUploadDoc.setUpdtdDate(LocalDateTime.now());
+		docRepoEdmsUploadDocRepo.save(edmsUploadDoc);
+		RequestBeanNRI bean = new RequestBeanNRI();
+		bean = mapHeaderToJson(bean, edmsUploadDoc);
+		ReqBean videoBean = new ReqBean();
+		EdmsRequUrl edmsRequUrl = new EdmsRequUrl(uploadDocumentSvc);
+		String[] response = {};
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.RESPONSE_ARRAY_IS_NOT_EMPTY);
+			response = edmsRequUrl.makeEdmsReq(channelId, currentLead, documents);
+		} catch (ServiceBusinessException e) {
+			FLogger.error(Constants.TIER_NAME, NriMainClassSvc.class.getSimpleName(), thisMethod,
+					NriUploadConstant.RESPONSE_ARRAY_IS_EMPTY + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		}
+		String docUploadURL = path4;
+		String urlResp;
+		if (response.length > 0) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.RESPONSE_LENGTH_GREATER_THST_0);
+			urlResp = response[0];
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.RESPONSE_LENGTH_LESS_THAN_OR_EQUAL_TO_ZERO);
+			urlResp = Constants.PATH_4;
+		}
+		if (urlResp.equals(Constants.PATH_2)) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.UPDATING_EDMS_DOC_UPLOAD_URL_PATH);
+			docUploadURL = path2;
+		}
+		System.out.println("Doc upload URL " + docUploadURL);
+		String[] docs = Arrays.copyOfRange(response, 1, response.length);
+		boolean leadIdPresent = mkrChckrDtlsRepo.existsByRefNo(currentLead);
+		PublicKey encodedPublicKey = null;
+		PrivateKey encodedPrivateKey = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.CHECKING_PUBLIC_AND_PRIVATE_KEY_PRESENT);
+			encodedPublicKey = ((X509Certificate) KeyManagementService.getKeyObject(Constants.KEY_EDMSPUBKEY))
+					.getPublicKey();
+			encodedPrivateKey = (PrivateKey) KeyManagementService.getKeyObject(Constants.KEY_EDMSPRIVAYE_KEY);
+		} catch (TechboneKMSException e) {
+			FLogger.error(Constants.TIER_NAME, NriMainClassSvc.class.getSimpleName(), thisMethod,
+					NriUploadConstant.PUBLIC_OR_PRIVATE_KEY_NOT_PRESENT + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		}
+		Object[] beans = mapDocument(docs, currentLead, bean, videoBean, leadIdPresent, cif, ckycNumber);
+		bean = (RequestBeanNRI) beans[0];
+
+		EDMSResponse docUploadRes = uploadDocs(bean, docUploadURL, encodedPrivateKey, encodedPublicKey, channelId,
+				currentLead);
+		String videoKycUploadUrl = path6;
+		String cId = "Y2NDSSA";
+		videoBean = (ReqBean) beans[1];
+		EDMSResponse vidUploadRes = null;
+		if (videoBean.getBase64() != null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					RekycUploadConstants.VIDEO_BASE64_IS_NOT_NULL);
+
+			vidUploadRes = uploadVideo(videoBean, videoKycUploadUrl, encodedPrivateKey, encodedPublicKey, cId,
+					currentLead);
+			System.out.println("Doc Upload Response " + vidUploadRes.getResponseCode());
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		addingValuesInUploadDoc(edmsUploadDoc, docUploadRes, channelId);
+	}
+
+	public EDMSResponse uploadVideo(ReqBean videoBean, String videoKycUploadUrl, PrivateKey encodedPrivateKey,
+			PublicKey encodedPublicKey, String channelId, String refNo) {
+		String thisMethod = RekycUploadConstants.UPLOAD_VIDEO;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		Gson gson = new Gson();
+
+		Map<Object, Object> maskedRequestMap = loggingAspect.maskInstanceOfMap(videoBean);
+		EDMSResponse vidUploadRes = null;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+				RekycUploadConstants.UPLOADING_VIDEO_REQUEST_TO_EDMS);
+		FLogger.info(Constants.TIER_NAME, ReKycMainClassSvc.class.getSimpleName(), RekycUploadConstants.VAL,
+				RekycUploadConstants.VID_UPLOAD_REQ + refNo + gson.toJson(maskedRequestMap));
+		System.out.println("Video req " + gson.toJson(maskedRequestMap));
+		vidUploadRes = callApi.callEDMSAPI(videoBean, videoKycUploadUrl, encodedPublicKey, encodedPrivateKey,
+				channelId);
+		Map<Object, Object> maskedResponsetMap = loggingAspect.maskInstanceOfMap(vidUploadRes);
+		FLogger.info(Constants.TIER_NAME, ReKycMainClassSvc.class.getSimpleName(), RekycUploadConstants.VAL,
+				RekycUploadConstants.VID_UPLOAD_RES + refNo + gson.toJson(maskedResponsetMap));
+		audit.performVideoAudit(refNo, videoBean, vidUploadRes, videoKycUploadUrl, "edms_video_doc_rekyc");
+
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return vidUploadRes;
+	}
+
+	/**
+	 * Method Name: mapHeaderToJson Description: Maps the details of an
+	 * EdmsUploadDoc object to a RequestBean
+	 * 
+	 * @param bean
+	 * @param edmsUploadDoc
+	 * @return RequestBeanETB
+	 */
+	public RequestBeanNRI mapHeaderToJson(RequestBeanNRI bean, EdmsUploadDoc edmsUploadDoc) {
+		String thisMethod = NriUploadConstant.MAP_HEADER_TO_JSON;
+		String refNo = edmsUploadDoc.getRefNo();
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		bean.setAccountType(String.format(NriUploadConstant.ZERO_TWO_D, 1));
+		Optional<NriAccntOnbrdng> accountOnboardingStatusOptional = nriAccntOnbrdingRepo.findById(refNo);
+		if (accountOnboardingStatusOptional.isPresent()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.ACCOUNT_ONBOARDING_STATUS_OPTIONAL_IS_PRESENT);
+			NriAccntOnbrdng accountOnboardingStatusData = accountOnboardingStatusOptional.get();
+			if (accountOnboardingStatusData != null) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						NriUploadConstant.ACCOUNT_ONBOARDING_STATUS_DATA_IS_PRESENT);
+				bean.setAcct_no(accountOnboardingStatusData.getAccntNoNre() != null
+						? accountOnboardingStatusData.getAccntNoNre()
+						: NriUploadConstant.EMPTY_STRING);
+				bean.setCifCreationDate(mainClassUtility.dateFormatChange(accountOnboardingStatusData.getCifCrtfDt()));
+				bean.setCifNumber(
+						accountOnboardingStatusData.getCif() != null ? accountOnboardingStatusData.getCif().toString()
+								: NriUploadConstant.EMPTY_STRING);
+			}
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.ACCOUNT_ONBOARDING_STATUS_OPTIONAL_IS_NOT_PRESENT);
+			bean.setAcct_no(NriUploadConstant.EMPTY_STRING);
+			bean.setCifCreationDate(NriUploadConstant.EMPTY_STRING);
+			bean.setCifNumber(NriUploadConstant.EMPTY_STRING);
+		}
+
+		Optional<CustomerPd> customerPdOptional = customerPdRepository.findById(refNo);
+		CustomerPd customerPdData = null;
+		if (customerPdOptional.isPresent()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.CUSTOMER_PD_OPTIONAL_IS_PRESENT);
+			customerPdData = customerPdOptional.get();
+			bean.setApplicantFirstName(
+					customerPdData.getFname() != null ? customerPdData.getFname() : NriUploadConstant.EMPTY_STRING);
+
+			bean.setApplicantMiddleName(
+					customerPdData.getMname() != null ? customerPdData.getMname() : NriUploadConstant.EMPTY_STRING);
+			bean.setApplicantLastName(
+					customerPdData.getLname() != null ? customerPdData.getLname() : NriUploadConstant.EMPTY_STRING);
+			bean.setApplicantNamePrefix(mainClassUtility.getSalutation(customerPdData.getSalutation()));
+			bean.setApplicationReferenceNo(NriUploadConstant.EMPTY_STRING);
+			bean.setArchivalFlag(mainClassUtility.falgSet(false));
+			bean.setBranchCode(customerPdData.getBrchCd() == null ? NriUploadConstant.EMPTY_STRING
+					: String.format(NriUploadConstant.ZERO_FIVE_D, customerPdData.getBrchCd()));
+			bean.setChannelId("Y2NDSSA");
+			bean.setCkycDate(mainClassUtility.dateFormatChange(null));
+			bean.setCkycNumber(customerPdData.getCkycNo() != null ? (customerPdData.getCkycNo()).toString()
+					: NriUploadConstant.EMPTY_STRING);
+			bean.setConstitutionType(NriUploadConstant.ZERO_ONE);
+			bean.setDob(mainClassUtility.dateFormatChange(customerPdData.getDob()));
+			bean.setKycVerificationBranch(customerPdData.getBrchCd() == null ? NriUploadConstant.EMPTY_STRING
+					: String.format(NriUploadConstant.ZERO_FIVE_D, customerPdData.getBrchCd()));
+			bean.setKycVerificationDesignation(NriUploadConstant.EMPTY_STRING);
+			bean.setKycVerificationEmpCode(NriUploadConstant.EMPTY_STRING);
+			bean.setKycVerificationName(NriUploadConstant.EMPTY_STRING);
+			bean.setMobileISDCode(
+					customerPdData.getMobile_isd_code() != null ? customerPdData.getMobile_isd_code().substring(1)
+							: NriUploadConstant.NIGHTY_ONE);
+			bean.setMobileNo(customerPdData.getMobileNo() != null ? customerPdData.getMobileNo()
+					: NriUploadConstant.EMPTY_STRING);
+			bean.setNoOfKYC(String.valueOf(edmsUploadDoc.getNoOfKyc()));
+			bean.setNoOfOthers(String.valueOf(edmsUploadDoc.getNoOfOthers()));
+			bean.setNoOfPOA(String.valueOf(edmsUploadDoc.getNoOfPoa()));
+			bean.setNoOfPOI(String.valueOf(edmsUploadDoc.getNoOfPoi()));
+			bean.setRescanFlag(mainClassUtility.falgSet(false));
+			bean.setAccountOpeningDate(NriUploadConstant.EMPTY_STRING);
+			bean.setApplicationNumber(NriUploadConstant.EMPTY_STRING);
+		}
+		Encryption encryption = new Encryption();
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.CHECKING_PAN_NUMBER_PRESENT);
+			if (null != customerPdData) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						NriUploadConstant.CUSTOMER_PD_OPTIONAL_IS_PRESENT);
+				String pan = customerPdData.getPanNo();
+				if (null != pan && !pan.isBlank()) {
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+							NriUploadConstant.CHECKING_PAN_NUMBER_IS_NOT_NULL);
+					bean.setPan(encryption.decrypt(statusflag.getBytes(), customerPdData.getPanNo()));
+				} else {
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+							NriUploadConstant.PAN_NUMBER_IS_NULL);
+					bean.setPan(NriUploadConstant.EMPTY_STRING);
+				}
+			} else {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						NriUploadConstant.PAN_NUMBER_IS_NULL);
+				bean.setPan(NriUploadConstant.EMPTY_STRING);
+			}
+		} catch (InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException
+				| InvalidAlgorithmParameterException | IllegalStateException | IllegalBlockSizeException
+				| BadPaddingException e) {
+			FLogger.error(Constants.TIER_NAME, NriMainClassSvc.class.getSimpleName(), thisMethod,
+					NriUploadConstant.PAN_NUMBER_NOT_PRESENT + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return bean;
+	}
+
+	/**
+	 * Method Name: mapDocument Description: Adding photo and Sign doc Type
+	 * 
+	 * @param docs
+	 * @param currentLead
+	 * @param bean
+	 * @param leadIdPresent
+	 * @param cif
+	 * @param ckycNumber
+	 * @return RequestBeanETB
+	 */
+	public Object[] mapDocument(String[] docs, String currentLead, RequestBeanNRI bean, ReqBean videoBean,
+			boolean leadIdPresent, String cif, Long ckycNumber) {
+		String thisMethod = NriUploadConstant.MAP_DOCUMENT;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+
+		Optional<List<EdmsDocDetails>> edmsDocDetailsInfo = edmsDocDetailsRepo.findBycompositeKeysRefNo(currentLead);
+		if (edmsDocDetailsInfo.isPresent()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.EDMS_DOC_DETAILS_REPO_PRESENT);
+			List<EdmsDocDetails> documents = edmsDocDetailsInfo.get();
+			String photoDocType = "DC_004";
+			String signDocType = "DC_005";
+
+			for (EdmsDocDetails docDetails : documents) {
+
+				if (Arrays.asList(docs).contains(docDetails.getDocEdmsMap())) {
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+							NriUploadConstant.DOCS_CONTAINS_DOC_DETAILS_GET_DOC_EDMS_MAP);
+					mainClassUtility.processDocument(docDetails, bean, videoBean, photoDocType, signDocType, cif,
+							ckycNumber);
+				}
+			}
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return new Object[] { bean, videoBean };
+	}
+
+	/**
+	 * Method Name : uploadDocs Description: This method Upload Docs to EDMS
+	 * 
+	 * @param bean
+	 * @param docUploadURL
+	 * @param encodedPrivateKey
+	 * @param encodedPublicKey
+	 * @param channelId
+	 * @return EDMSResponse
+	 */
+	public EDMSResponse uploadDocs(RequestBeanNRI bean, String docUploadURL, PrivateKey encodedPrivateKey,
+			PublicKey encodedPublicKey, String channelId, String refNo) {
+		String thisMethod = NriUploadConstant.UPLOAD_DOCS;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		Gson gson = new Gson();
+
+		Map<Object, Object> maskedRequestMap = loggingAspect.maskInstanceOfMap(bean);
+		EDMSResponse docUploadRes = null;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+				NriUploadConstant.UPLOADING_DOCS_TO_EDMS);
+
+		FLogger.info(Constants.TIER_NAME, NriMainClassSvc.class.getSimpleName(), NriUploadConstant.VAL,
+				NriUploadConstant.DOC_UPLOAD_REQ + refNo + gson.toJson(maskedRequestMap));
+		docUploadRes = callApi.callEDMSAPI(bean, docUploadURL, encodedPublicKey, encodedPrivateKey, channelId);
+		Map<Object, Object> maskedResponsetMap = loggingAspect.maskInstanceOfMap(docUploadRes);
+		FLogger.info(Constants.TIER_NAME, NriMainClassSvc.class.getSimpleName(), NriUploadConstant.VAL,
+				NriUploadConstant.DOC_UPLOAD_RES + refNo + gson.toJson(maskedResponsetMap));
+		audit.performAudit(refNo, bean, docUploadRes, docUploadURL, "edms_upload_doc_nri");
+
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return docUploadRes;
+
+	}
+
+	/**
+	 * Method Name: addingValuesInUploadDoc Description: Adds values to the
+	 * EdmsUploadDoc object based on the upload response.
+	 * 
+	 * @param edmsUploadDoc The EdmsUploadDoc object to be updated.
+	 * @param docUploadRes  The response from the document upload operation.
+	 * @param channelID     A String indicating if the Channel Id is present.
+	 */
+
+	public void addingValuesInUploadDoc(EdmsUploadDoc edmsUploadDoc, EDMSResponse docUploadRes, String channelID) {
+		String thisMethod = NriUploadConstant.ADDING_VALUES_IN_UPLOAD_DOC;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		List<String> channelIds = Arrays.asList(CmnParamsConst.getMap().get(Constants.ETB_APPWEB_CA_KEY),
+				CmnParamsConst.getMap().get(Constants.ETB_BRANCH_CA_KEY),
+				CmnParamsConst.getMap().get(Constants.ETB_APPWEB_SA_KEY),
+				CmnParamsConst.getMap().get(Constants.ETB_BRANCH_SA_KEY));
+		if (channelIds.contains(channelID) && null != docUploadRes) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.LEADID_PRESENT_IS_TRUE);
+			if (docUploadRes.getResponseCode().equals(Constants.RESPNOSECODE_00)) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						NriUploadConstant.RESPONSE_CODE_IS_00_SUCESSFULLY_UPLOADED);
+				edmsUploadDoc.setUploadStatus(true);
+				docRepoEdmsUploadDocRepo.save(edmsUploadDoc);
+				saveResp.saveEdmsResp(docUploadRes.getResponseCode(), edmsUploadDoc);
+			} else {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						NriUploadConstant.DOCUMENT_RESPONSE_CODE_IS_NOT_00_FAILED_TO_UPLOAD);
+				edmsUploadDoc.setResponseStatus(Integer.parseInt(docUploadRes.getResponseCode()));
+				docRepoEdmsUploadDocRepo.save(edmsUploadDoc);
+				saveResp.saveEdmsResp(docUploadRes.getResponseCode(), edmsUploadDoc);
+			}
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.DOCS_NOT_UPLOADED_TO_EDMS);
+			saveResp.saveEdmsResp(NriUploadConstant.ONE_THOUSAND_TWO, edmsUploadDoc);
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+	}
+
+	/**
+	 * Method Name: invokeService Invokes a service based on the provided service
+	 * definition and input parameters.
+	 * 
+	 * @param pserviceDefinition
+	 * @param pserviceInputParams
+	 * @param plistCommandServiceOutputList
+	 * @return Map<String, Object>
+	 * @throws ServiceBusinessException If a business logic error occurs during the
+	 *                                  service execution.
+	 */
+	@Override
+	public Map<String, Object> invokeService(IServiceDefinition pserviceDefinition,
+			Map<String, Object> pserviceInputParams, List<ParameterType> plistCommandServiceOutputList)
+			throws ServiceBusinessException {
+		String thisMethod = NriUploadConstant.INVOKE_SERVICE;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return pserviceInputParams;
+	}
+}
