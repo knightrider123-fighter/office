@@ -684,3 +684,173 @@ class NriMainClassSvcTest {
                 .addDocByLeadId(eq("REF789"), anyList(), eq(uploadDoc));
     }
 }
+
+ggggggg
+package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
+
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sbi.yono.document.savingsaccount.edms.bean.EDMSResponse;
+import com.sbi.yono.document.savingsaccount.edms.bean.ReqBean;
+import com.sbi.yono.document.savingsaccount.edms.bean.RequestBeanNRI;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.*;
+import com.sbi.yono.document.savingsaccount.edms.entity.*;
+import com.sbi.yono.document.savingsaccount.edms.upload.Audit;
+import com.sbi.yono.document.savingsaccount.edms.uploaddoc.UploadDocumentSvc;
+import com.sbi.yono.document.savingsaccount.edms.utility.SaveEdmsResponse;
+import com.sbi.yono.document.savingsaccount.edms.utility.ValidateDocuments;
+import com.tcs.techbone.exception.ServiceBusinessException;
+
+@ExtendWith(MockitoExtension.class)
+class NriMainClassSvcAddDocTest {
+
+    @Mock private EdmsUploadDocRepo docRepoEdmsUploadDocRepo;
+    @Mock private EdmsDocDetailsRepo edmsDocDetailsRepo;
+    @Mock private MkrChckrDtlsRepo mkrChckrDtlsRepo;
+    @Mock private UploadDocumentSvc uploadDocumentSvc;
+    @Mock private Audit audit;
+    @Mock private CustomerPdRepository customerPdRepository;
+    @Mock private SaveEdmsResponse saveResp;
+    @Mock private ValidateDocuments validateDocuments;
+    @Mock private NriAccntOnbrdingRepo nriAccntOnbrdingRepo;
+
+    @Spy
+    @InjectMocks
+    private NriMainClassSvc service;
+
+    private EdmsUploadDoc uploadDoc;
+    private List<EdmsDocDetails> documents;
+
+    @BeforeEach
+    void setup() throws Exception {
+
+        uploadDoc = new EdmsUploadDoc();
+        uploadDoc.setRefNo("REF100");
+        uploadDoc.setChannelId("Y2ND");
+
+        EdmsDocDetails doc = new EdmsDocDetails();
+        documents = List.of(doc);
+
+        // Customer PD
+        CustomerPd pd = new CustomerPd();
+        pd.setCkycNo(123456789L);
+        when(customerPdRepository.findById("REF100"))
+                .thenReturn(Optional.of(pd));
+
+        // NRI onboarding
+        NriAccntOnbrdng nri = new NriAccntOnbrdng();
+        nri.setCif(999999999L);
+        when(nriAccntOnbrdingRepo.findById("REF100"))
+                .thenReturn(Optional.of(nri));
+
+        when(mkrChckrDtlsRepo.existsByRefNo(anyString()))
+                .thenReturn(true);
+
+        when(docRepoEdmsUploadDocRepo.save(any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        // ---- HARD PART STUBS ----
+        doReturn(new String[] { "PATH4", "doc1" })
+                .when(service).makeEdmsReq(any(), any(), any());
+
+        doReturn(new Object[] { new RequestBeanNRI(), new ReqBean() })
+                .when(service).mapDocument(any(), any(), any(), any(), anyBoolean(), any(), anyLong());
+
+        EDMSResponse successResp = new EDMSResponse();
+        successResp.setResponseCode("200");
+
+        doReturn(successResp)
+                .when(service)
+                .uploadDocs(any(), any(), any(), any(), any(), any());
+
+        doReturn(successResp)
+                .when(service)
+                .uploadVideo(any(), any(), any(), any(), any(), any());
+    }
+
+    // ==================================================
+    // 1️⃣ FULL SUCCESS FLOW
+    // ==================================================
+    @Test
+    void addDocByLeadId_successFlow_shouldExecuteAll() throws Exception {
+
+        service.addDocByLeadId("REF100", documents, uploadDoc);
+
+        verify(customerPdRepository).findById("REF100");
+        verify(nriAccntOnbrdingRepo).findById("REF100");
+        verify(docRepoEdmsUploadDocRepo).save(uploadDoc);
+        verify(service).uploadDocs(any(), any(), any(), any(), any(), eq("REF100"));
+    }
+
+    // ==================================================
+    // 2️⃣ Customer PD NOT PRESENT
+    // ==================================================
+    @Test
+    void addDocByLeadId_whenCustomerPdAbsent_shouldUseDefaultCKYC() throws Exception {
+
+        when(customerPdRepository.findById("REF100"))
+                .thenReturn(Optional.empty());
+
+        service.addDocByLeadId("REF100", documents, uploadDoc);
+
+        verify(docRepoEdmsUploadDocRepo).save(uploadDoc);
+    }
+
+    // ==================================================
+    // 3️⃣ NRI Onboarding NOT PRESENT
+    // ==================================================
+    @Test
+    void addDocByLeadId_whenNriOnboardingAbsent_shouldHandleNullCif() throws Exception {
+
+        when(nriAccntOnbrdingRepo.findById("REF100"))
+                .thenReturn(Optional.empty());
+
+        service.addDocByLeadId("REF100", documents, uploadDoc);
+
+        verify(service).uploadDocs(any(), any(), any(), any(), any(), eq("REF100"));
+    }
+
+    // ==================================================
+    // 4️⃣ makeEdmsReq throws exception
+    // ==================================================
+    @Test
+    void addDocByLeadId_whenMakeEdmsReqFails_shouldContinue() throws Exception {
+
+        doThrow(new ServiceBusinessException("EDMS FAIL"))
+                .when(service).makeEdmsReq(any(), any(), any());
+
+        service.addDocByLeadId("REF100", documents, uploadDoc);
+
+        verify(docRepoEdmsUploadDocRepo).save(uploadDoc);
+    }
+
+    // ==================================================
+    // 5️⃣ Video base64 NULL → skip uploadVideo
+    // ==================================================
+    @Test
+    void addDocByLeadId_whenVideoBase64Null_shouldSkipVideoUpload() throws Exception {
+
+        ReqBean videoBean = new ReqBean(); // base64 null
+        doReturn(new Object[] { new RequestBeanNRI(), videoBean })
+                .when(service).mapDocument(any(), any(), any(), any(), anyBoolean(), any(), anyLong());
+
+        service.addDocByLeadId("REF100", documents, uploadDoc);
+
+        verify(service, never()).uploadVideo(any(), any(), any(), any(), any(), any());
+    }
+}
