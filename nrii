@@ -1,3 +1,18 @@
+PublicKey encodedPublicKey = null;
+		PrivateKey encodedPrivateKey = null;
+try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.CHECKING_PUBLIC_AND_PRIVATE_KEY_PRESENT);
+			encodedPublicKey = ((X509Certificate) KeyManagementService.getKeyObject(Constants.KEY_EDMSPUBKEY))
+					.getPublicKey();
+			encodedPrivateKey = (PrivateKey) KeyManagementService.getKeyObject(Constants.KEY_EDMSPRIVAYE_KEY);
+		} catch (TechboneKMSException e) {
+			FLogger.error(Constants.TIER_NAME, NriMainClassSvc.class.getSimpleName(), thisMethod,
+					NriUploadConstant.PUBLIC_OR_PRIVATE_KEY_NOT_PRESENT + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		}
+
+
 package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
 
 import static org.junit.jupiter.api.Assertions.*;
