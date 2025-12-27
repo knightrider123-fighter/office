@@ -1,3 +1,13 @@
+java.lang.IllegalStateException: Cipher not initialized
+	at java.base/javax.crypto.Cipher.wrap(Cipher.java:2572)
+	at com.sbi.yono.document.savingsaccount.edms.encryption.EDMSEncryption.encryptRawJSON(EDMSEncryption.java:141)
+	at com.sbi.yono.document.savingsaccount.edms.upload.CallApi.callEDMSAPI(CallApi.java:72)
+	at com.sbi.yono.document.savingsaccount.edms.nrinroupload.NriMainClassSvc.uploadVideo(NriMainClassSvc.java:279)
+	at com.sbi.yono.document.savingsaccount.edms.nrinroupload.NriMainClassSvc.uploadVideo(NriMainClassSvc.java:268)
+	at com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest.NriMainClassSvcUploadVideoTest.uploadVideo_success_usingDoReturn(NriMainClassSvcUploadVideoTest.java:72)
+
+
+
 PublicKey encodedPublicKey = null;
 		PrivateKey encodedPrivateKey = null;
 try {
