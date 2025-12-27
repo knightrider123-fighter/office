@@ -1,3 +1,19 @@
+org.mockito.exceptions.misusing.UnnecessaryStubbingException: 
+Unnecessary stubbings detected.
+Clean & maintainable test code requires zero unnecessary code.
+Following stubbings are unnecessary (click to navigate to relevant line of code):
+  1. -> at com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest.NriMainClassSvcAddDocTest.setup(NriMainClassSvcAddDocTest.java:76)
+  2. -> at com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest.NriMainClassSvcAddDocTest.setup(NriMainClassSvcAddDocTest.java:87)
+  3. -> at com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest.NriMainClassSvcAddDocTest.setup(NriMainClassSvcAddDocTest.java:94)
+  4. -> at com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest.NriMainClassSvcAddDocTest.setup(NriMainClassSvcAddDocTest.java:98)
+Please remove unnecessary stubbings or use 'lenient' strictness. More info: javadoc for UnnecessaryStubbingException class.
+	at org.mockito.junit.jupiter.MockitoExtension.lambda$afterEach$2(MockitoExtension.java:200)
+	at java.base/java.util.Optional.ifPresent(Optional.java:178)
+	at org.mockito.junit.jupiter.MockitoExtension.afterEach(MockitoExtension.java:198)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+
 @Test
 void addDocByLeadId_shouldMockEdmsRequUrlCorrectly() throws Exception {
 
