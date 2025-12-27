@@ -1,3 +1,45 @@
+@Test
+void addDocByLeadId_shouldMockEdmsRequUrlCorrectly() throws Exception {
+
+    EdmsUploadDoc uploadDoc = new EdmsUploadDoc();
+    uploadDoc.setRefNo("REF100");
+    uploadDoc.setChannelId("Y2ND");
+
+    EdmsDocDetails doc = new EdmsDocDetails();
+    List<EdmsDocDetails> documents = List.of(doc);
+
+    when(customerPdRepository.findById("REF100"))
+            .thenReturn(Optional.empty());
+
+    when(nriAccntOnbrdingRepo.findById("REF100"))
+            .thenReturn(Optional.empty());
+
+    when(mkrChckrDtlsRepo.existsByRefNo(any()))
+            .thenReturn(false);
+
+    doReturn(new Object[] { new RequestBeanNRI(), new ReqBean() })
+            .when(service).mapDocument(any(), any(), any(), any(), anyBoolean(), any(), anyLong());
+
+    EDMSResponse success = new EDMSResponse();
+    success.setResponseCode("200");
+
+    doReturn(success)
+            .when(service).uploadDocs(any(), any(), any(), any(), any(), any());
+
+    try (MockedConstruction<EdmsRequUrl> mocked =
+            mockConstruction(EdmsRequUrl.class,
+                (mock, context) -> {
+                    when(mock.makeEdmsReq(any(), any(), any()))
+                            .thenReturn(new String[]{"PATH4", "doc1"});
+                })) {
+
+        service.addDocByLeadId("REF100", documents, uploadDoc);
+    }
+
+    verify(docRepoEdmsUploadDocRepo).save(uploadDoc);
+}
+
+
 package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
 
 import java.io.Serializable;
