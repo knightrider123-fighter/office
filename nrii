@@ -533,3 +533,154 @@ public class NriMainClassSvc extends BaseServiceFactory implements Serializable 
 		return pserviceInputParams;
 	}
 }
+
+
+
+tt5tttttttt
+package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
+
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.*;
+import com.sbi.yono.document.savingsaccount.edms.entity.*;
+import com.sbi.yono.document.savingsaccount.edms.upload.Audit;
+import com.sbi.yono.document.savingsaccount.edms.uploaddoc.UploadDocumentSvc;
+import com.sbi.yono.document.savingsaccount.edms.utility.SaveEdmsResponse;
+import com.sbi.yono.document.savingsaccount.edms.utility.ValidateDocuments;
+import com.tcs.techbone.exception.ServiceBusinessException;
+
+@ExtendWith(MockitoExtension.class)
+class NriMainClassSvcTest {
+
+    @Mock
+    private EdmsUploadDocRepo docRepoEdmsUploadDocRepo;
+
+    @Mock
+    private EdmsDocDetailsRepo edmsDocDetailsRepo;
+
+    @Mock
+    private MkrChckrDtlsRepo mkrChckrDtlsRepo;
+
+    @Mock
+    private UploadDocumentSvc uploadDocumentSvc;
+
+    @Mock
+    private Audit audit;
+
+    @Mock
+    private AccountOnbrdngStatusRepository accountOnbrdngStatusRepository;
+
+    @Mock
+    private CustomerPdRepository customerPdRepository;
+
+    @Mock
+    private SaveEdmsResponse saveResp;
+
+    @Mock
+    private ValidateDocuments validateDocuments;
+
+    @Mock
+    private NriAccntOnbrdingRepo nriAccntOnbrdingRepo;
+
+    @Spy
+    @InjectMocks
+    private NriMainClassSvc nriMainClassSvc;
+
+    // =========================
+    // 1️⃣ Empty list scenario
+    // =========================
+    @Test
+    void edmsCall_whenListIsEmpty_shouldDoNothing() {
+
+        nriMainClassSvc.edmsCall(Collections.emptyList());
+
+        verifyNoInteractions(edmsDocDetailsRepo);
+        verify(nriMainClassSvc, never())
+                .addDocByLeadId(anyString(), anyList(), any());
+    }
+
+    // ==========================================
+    // 2️⃣ Doc details present → success path
+    // ==========================================
+    @Test
+    void edmsCall_whenDocDetailsPresent_shouldCallAddDocByLeadId() throws Exception {
+
+        EdmsUploadDoc uploadDoc = new EdmsUploadDoc();
+        uploadDoc.setRefNo("REF123");
+
+        EdmsDocDetails docDetails = new EdmsDocDetails();
+
+        when(edmsDocDetailsRepo.findBycompositeKeysRefNo("REF123"))
+                .thenReturn(Optional.of(List.of(docDetails)));
+
+        doNothing().when(nriMainClassSvc)
+                .addDocByLeadId(anyString(), anyList(), any());
+
+        nriMainClassSvc.edmsCall(List.of(uploadDoc));
+
+        verify(edmsDocDetailsRepo)
+                .findBycompositeKeysRefNo("REF123");
+
+        verify(nriMainClassSvc)
+                .addDocByLeadId(eq("REF123"), anyList(), eq(uploadDoc));
+    }
+
+    // =====================================
+    // 3️⃣ Doc details NOT present
+    // =====================================
+    @Test
+    void edmsCall_whenDocDetailsNotPresent_shouldSkipProcessing() {
+
+        EdmsUploadDoc uploadDoc = new EdmsUploadDoc();
+        uploadDoc.setRefNo("REF456");
+
+        when(edmsDocDetailsRepo.findBycompositeKeysRefNo("REF456"))
+                .thenReturn(Optional.empty());
+
+        nriMainClassSvc.edmsCall(List.of(uploadDoc));
+
+        verify(edmsDocDetailsRepo)
+                .findBycompositeKeysRefNo("REF456");
+
+        verify(nriMainClassSvc, never())
+                .addDocByLeadId(anyString(), anyList(), any());
+    }
+
+    // ============================================
+    // 4️⃣ addDocByLeadId throws exception (catch)
+    // ============================================
+    @Test
+    void edmsCall_whenAddDocByLeadIdThrowsException_shouldHandleGracefully()
+            throws Exception {
+
+        EdmsUploadDoc uploadDoc = new EdmsUploadDoc();
+        uploadDoc.setRefNo("REF789");
+
+        EdmsDocDetails docDetails = new EdmsDocDetails();
+
+        when(edmsDocDetailsRepo.findBycompositeKeysRefNo("REF789"))
+                .thenReturn(Optional.of(List.of(docDetails)));
+
+        doThrow(new ServiceBusinessException("Test Exception"))
+                .when(nriMainClassSvc)
+                .addDocByLeadId(anyString(), anyList(), any());
+
+        // Should NOT throw exception
+        nriMainClassSvc.edmsCall(List.of(uploadDoc));
+
+        verify(nriMainClassSvc)
+                .addDocByLeadId(eq("REF789"), anyList(), eq(uploadDoc));
+    }
+}
