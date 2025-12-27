@@ -42,6 +42,171 @@ class NriMainClassSvcUploadVideoTest {
     // 1️⃣ SUCCESS CASE
     // ======================================
     @Test
+    void uploadVideo_success_usingDoReturn() {
+
+        ReqBean videoBean = new ReqBean();
+        videoBean.setBase64("BASE64_VIDEO");
+
+        EDMSResponse response = new EDMSResponse();
+        response.setResponseCode("200");
+
+        Map<Object, Object> maskedReq = new HashMap<>();
+        Map<Object, Object> maskedResp = new HashMap<>();
+
+        // doReturn style stubbing
+        doReturn(maskedReq)
+                .doReturn(maskedResp)
+                .when(loggingAspect).maskInstanceOfMap(any());
+
+        doReturn(response)
+                .when(callApi)
+                .callEDMSAPI(
+                        any(),
+                        anyString(),
+                        any(PublicKey.class),
+                        any(PrivateKey.class),
+                        anyString());
+
+        EDMSResponse result = service.uploadVideo(
+                videoBean,
+                "http://edms/video",
+                mock(PrivateKey.class),
+                mock(PublicKey.class),
+                "Y2NDSSA",
+                "REF123");
+
+        assertNotNull(result);
+        assertEquals("200", result.getResponseCode());
+
+        verify(callApi).callEDMSAPI(
+                eq(videoBean),
+                eq("http://edms/video"),
+                any(PublicKey.class),
+                any(PrivateKey.class),
+                eq("Y2NDSSA"));
+
+        verify(audit).performVideoAudit(
+                eq("REF123"),
+                eq(videoBean),
+                eq(response),
+                eq("http://edms/video"),
+                eq("edms_video_doc_rekyc"));
+    }
+
+    // ======================================
+    // 2️⃣ EDMS API RETURNS NULL
+    // ======================================
+    @Test
+    void uploadVideo_apiReturnsNull_usingDoReturn() {
+
+        ReqBean videoBean = new ReqBean();
+        videoBean.setBase64("BASE64_VIDEO");
+
+        doReturn(new HashMap<>())
+                .when(loggingAspect).maskInstanceOfMap(any());
+
+        doReturn(null)
+                .when(callApi)
+                .callEDMSAPI(any(), any(), any(), any(), any());
+
+        EDMSResponse result = service.uploadVideo(
+                videoBean,
+                "http://edms/video",
+                mock(PrivateKey.class),
+                mock(PublicKey.class),
+                "Y2NDSSA",
+                "REF999");
+
+        assertNull(result);
+
+        verify(audit).performVideoAudit(
+                eq("REF999"),
+                eq(videoBean),
+                isNull(),
+                eq("http://edms/video"),
+                eq("edms_video_doc_rekyc"));
+    }
+
+    // ======================================
+    // 3️⃣ EMPTY MASK MAP
+    // ======================================
+    @Test
+    void uploadVideo_emptyMask_usingDoReturn() {
+
+        ReqBean videoBean = new ReqBean();
+        videoBean.setBase64("BASE64_VIDEO");
+
+        EDMSResponse response = new EDMSResponse();
+        response.setResponseCode("200");
+
+        doReturn(new HashMap<>())
+                .when(loggingAspect).maskInstanceOfMap(any());
+
+        doReturn(response)
+                .when(callApi)
+                .callEDMSAPI(any(), any(), any(), any(), any());
+
+        EDMSResponse result = service.uploadVideo(
+                videoBean,
+                "url",
+                mock(PrivateKey.class),
+                mock(PublicKey.class),
+                "CH",
+                "REF");
+
+        assertEquals("200", result.getResponseCode());
+    }
+}
+
+
+
+
+
+
+package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sbi.yono.document.savingsaccount.edms.bean.EDMSResponse;
+import com.sbi.yono.document.savingsaccount.edms.bean.ReqBean;
+import com.sbi.yono.document.savingsaccount.edms.upload.Audit;
+import com.sbi.yono.document.savingsaccount.edms.upload.CallApi;
+import com.sbi.yono.document.savingsaccount.edms.utility.LoggingAspect;
+
+@ExtendWith(MockitoExtension.class)
+class NriMainClassSvcUploadVideoTest {
+
+    @Mock
+    private CallApi callApi;
+
+    @Mock
+    private Audit audit;
+
+    @Mock
+    private LoggingAspect loggingAspect;
+
+    @Spy
+    @InjectMocks
+    private NriMainClassSvc service;
+
+    // ======================================
+    // 1️⃣ SUCCESS CASE
+    // ======================================
+    @Test
     void uploadVideo_success_shouldCallApiAndAudit() {
 
         ReqBean videoBean = new ReqBean();
