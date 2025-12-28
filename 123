@@ -1,3 +1,43 @@
+public void addingValuesInUploadDoc(EdmsUploadDoc edmsUploadDoc, EDMSResponse docUploadRes, String channelID) {
+		String thisMethod = NriUploadConstant.ADDING_VALUES_IN_UPLOAD_DOC;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		List<String> channelIds = Arrays.asList(CmnParamsConst.getMap().get(Constants.ETB_APPWEB_CA_KEY),
+				CmnParamsConst.getMap().get(Constants.ETB_BRANCH_CA_KEY),
+				CmnParamsConst.getMap().get(Constants.ETB_APPWEB_SA_KEY),
+				CmnParamsConst.getMap().get(Constants.ETB_BRANCH_SA_KEY));
+		if (channelIds.contains(channelID) && null != docUploadRes) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.LEADID_PRESENT_IS_TRUE);
+			if (docUploadRes.getResponseCode().equals(Constants.RESPNOSECODE_00)) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						NriUploadConstant.RESPONSE_CODE_IS_00_SUCESSFULLY_UPLOADED);
+				edmsUploadDoc.setUploadStatus(true);
+				docRepoEdmsUploadDocRepo.save(edmsUploadDoc);
+				saveResp.saveEdmsResp(docUploadRes.getResponseCode(), edmsUploadDoc);
+			} else {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						NriUploadConstant.DOCUMENT_RESPONSE_CODE_IS_NOT_00_FAILED_TO_UPLOAD);
+				edmsUploadDoc.setResponseStatus(Integer.parseInt(docUploadRes.getResponseCode()));
+				docRepoEdmsUploadDocRepo.save(edmsUploadDoc);
+				saveResp.saveEdmsResp(docUploadRes.getResponseCode(), edmsUploadDoc);
+			}
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.DOCS_NOT_UPLOADED_TO_EDMS);
+			saveResp.saveEdmsResp(NriUploadConstant.ONE_THOUSAND_TWO, edmsUploadDoc);
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+	}
+
+
+
+
+
+
+
+
+
+**********************************************************
 package com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest;
 
 import static org.junit.jupiter.api.Assertions.*;
