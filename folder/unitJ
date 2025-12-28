@@ -1,6 +1,142 @@
 package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.when;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+
+class NriMainClassUtilityDetermineDocTypesTest {
+
+    private NriMainClassUtility utility;
+
+    @Mock
+    private EdmsDocDetails photoDoc;
+
+    @Mock
+    private EdmsDocDetails signDoc;
+
+    @Mock
+    private EdmsDocDetails otherDoc;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        utility = new NriMainClassUtility();
+    }
+
+    // ================= PHOTO + SIGN FOUND (leadIdPresent = true) =================
+    @Test
+    void testDetermineDocTypes_photoAndSign_found_leadIdPresent_true() {
+
+        when(photoDoc.getDocId()).thenReturn(Constants.IDTYPE21); // PHOTO
+        when(signDoc.getDocId()).thenReturn(Constants.IDTYPE22);  // SIGN (lead present)
+
+        List<EdmsDocDetails> docs = Arrays.asList(photoDoc, signDoc);
+
+        String[] result = utility.determineDocTypes(docs, true);
+
+        assertEquals(Constants.IDTYPE21, result[0]);
+        assertEquals(Constants.IDTYPE22, result[1]);
+    }
+
+    // ================= PHOTO + SIGN FOUND (leadIdPresent = false) =================
+    @Test
+    void testDetermineDocTypes_photoAndSign_found_leadIdPresent_false() {
+
+        when(photoDoc.getDocId()).thenReturn(Constants.IDTYPE04); // PHOTO
+        when(signDoc.getDocId()).thenReturn(Constants.IDTYPE23);  // SIGN (branch flow)
+
+        List<EdmsDocDetails> docs = Arrays.asList(photoDoc, signDoc);
+
+        String[] result = utility.determineDocTypes(docs, false);
+
+        assertEquals(Constants.IDTYPE04, result[0]);
+        assertEquals(Constants.IDTYPE23, result[1]);
+    }
+
+    // ================= SIGN FIRST, PHOTO LATER =================
+    @Test
+    void testDetermineDocTypes_signFirst_thenPhoto() {
+
+        when(signDoc.getDocId()).thenReturn(Constants.IDTYPE05);  // SIGN
+        when(photoDoc.getDocId()).thenReturn(Constants.IDTYPE21); // PHOTO
+
+        List<EdmsDocDetails> docs = Arrays.asList(signDoc, photoDoc);
+
+        String[] result = utility.determineDocTypes(docs, true);
+
+        assertEquals(Constants.IDTYPE21, result[0]);
+        assertEquals(Constants.IDTYPE05, result[1]);
+    }
+
+    // ================= ONLY PHOTO FOUND =================
+    @Test
+    void testDetermineDocTypes_onlyPhotoFound() {
+
+        when(photoDoc.getDocId()).thenReturn(Constants.IDTYPE21);
+        when(otherDoc.getDocId()).thenReturn("OTHER");
+
+        List<EdmsDocDetails> docs = Arrays.asList(photoDoc, otherDoc);
+
+        String[] result = utility.determineDocTypes(docs, true);
+
+        assertEquals(Constants.IDTYPE21, result[0]);
+        assertNull(result[1]);
+    }
+
+    // ================= ONLY SIGN FOUND =================
+    @Test
+    void testDetermineDocTypes_onlySignFound() {
+
+        when(signDoc.getDocId()).thenReturn(Constants.IDTYPE22);
+
+        List<EdmsDocDetails> docs = Collections.singletonList(signDoc);
+
+        String[] result = utility.determineDocTypes(docs, true);
+
+        assertNull(result[0]);
+        assertEquals(Constants.IDTYPE22, result[1]);
+    }
+
+    // ================= NO MATCH FOUND =================
+    @Test
+    void testDetermineDocTypes_noMatchFound() {
+
+        when(otherDoc.getDocId()).thenReturn("UNKNOWN");
+
+        List<EdmsDocDetails> docs = Collections.singletonList(otherDoc);
+
+        String[] result = utility.determineDocTypes(docs, true);
+
+        assertNull(result[0]);
+        assertNull(result[1]);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+fffgfffgggg
+package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
