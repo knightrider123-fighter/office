@@ -1,0 +1,488 @@
+package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Base64;
+import java.util.List;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
+
+import com.sbi.yono.document.savingsaccount.edms.bean.CommNstdReqBean;
+import com.sbi.yono.document.savingsaccount.edms.bean.CommNstdReqBean2;
+import com.sbi.yono.document.savingsaccount.edms.bean.ReqBean;
+import com.sbi.yono.document.savingsaccount.edms.bean.RequestBeanETB;
+import com.sbi.yono.document.savingsaccount.edms.bean.RequestBeanNRI;
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+import com.sbi.yono.document.savingsaccount.edms.rekycupload.ReKycRequestBean;
+import com.sbi.yono.document.savingsaccount.edms.rekycupload.RekycUploadConstants;
+import com.tcs.techbone.exception.ServiceBusinessException;
+import com.tcs.techbone.logger.FLogger;
+
+public class NriMainClassUtility {
+	 
+
+	/**
+	 * Method Name: processDocument Checking which Document it is and Making Request
+	 * accordingly
+	 * 
+	 * @param docDetails
+	 * @param bean
+	 * @param photoDocType
+	 * @param signDocType
+	 * @param cif
+	 * @param ckycNumber
+	 */ 
+	public void processDocument(EdmsDocDetails docDetails, RequestBeanNRI bean,ReqBean videoBean, String photoDocType, String signDocType,
+			String cif, Long ckycNumber) {
+		String thisMethod = "processDocument";
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+				NriUploadConstant.PROCESSING_DOCUMENT + docDetails.getDocEdmsMap());
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.CHECKING_REQUEST_IS_CREATED);
+		System.out.println("Doc Name"+docDetails.getDocEdmsMap());
+		switch (docDetails.getDocEdmsMap()) {
+		case RekycUploadConstants.VIDEO:
+			FLogger.info(Constants.TIER_NAME1, this.getClass().getName(), thisMethod, RekycUploadConstants.VIDEO_PRESENT);
+			FLogger.info(Constants.TIER_NAME1, this.getClass().getName(), thisMethod, RekycUploadConstants.CREATING_VIDEO_REQUEST);
+			videoMethod(docDetails, videoBean, bean);
+			break;
+		case NriUploadConstant.PHOTO:
+			if (docDetails.getDocId().equals(photoDocType)) {
+				CommNstdReqBean2 mapDocumentToJson = null;
+				mapDocumentToJson = mapDocumentToJson2(bean.getPhoto(), docDetails, cif, ckycNumber);
+				String filename = "000000"+cif + Constants.PHOTO_NAME
+						+ docDetails.getFileName().substring(docDetails.getFileName().lastIndexOf(NriUploadConstant.DOT));
+				mapDocumentToJson.setFileName(filename);
+				bean.setPhoto(mapDocumentToJson);
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						NriUploadConstant.PHOTO_DOCUMENT_PROCESSED_WITH_ID + docDetails.getDocId());
+			}
+			break;
+		case NriUploadConstant.SIGN:
+			if (docDetails.getDocId().equals(signDocType)) {
+				CommNstdReqBean2 mapDocumentToJson = null;
+				mapDocumentToJson = mapDocumentToJson2(bean.getSign(), docDetails, cif, ckycNumber);
+				String filename = "000000"+cif + Constants.SIGN_NAME
+						+ docDetails.getFileName().substring(docDetails.getFileName().lastIndexOf(NriUploadConstant.DOT));
+				mapDocumentToJson.setFileName(filename);
+				bean.setSign(mapDocumentToJson);
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						NriUploadConstant.SIGN_DOCUMENT_PROCESSED_WITH_ID + docDetails.getDocId());
+			}
+			break;
+		default:
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.UNKNOWN_DOCUMENT_TYPE_CREATING_EDMS_REQUEST_FOR_DOCUMENT_ID + docDetails.getDocId());
+			createEdmsRequest(docDetails, bean, cif, ckycNumber);
+			break;
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+	}
+
+	/**
+	 * Method Name: getSalutation 
+	 * It gives String of Salutation
+	 * @param saluString
+	 * @return String
+	 */
+	public String getSalutation(String saluString) {
+		String thisMethod = NriUploadConstant.GET_SALUTATION;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		if(saluString == null)
+		{
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SALUTATION_IS_NULL);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return NriUploadConstant.EMPTY_STRING;
+		}
+		String appPreName;
+		switch (saluString) {
+		case NriUploadConstant.ONE:
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SALUTATION_IS_01);
+			appPreName = NriUploadConstant.MR;
+			break;
+		case NriUploadConstant.TWO:
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SALUTATION_IS_02);
+			appPreName = NriUploadConstant.MRS;
+			break;
+		case NriUploadConstant.THREE:
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SALUTATION_IS_03);
+			appPreName = NriUploadConstant.MS;
+			break;
+		case NriUploadConstant.FOUR:
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SALUTATION_IS_04);
+			appPreName = NriUploadConstant.MISS;
+			break;
+		case NriUploadConstant.FIVE:
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SALUTATION_IS_05);
+			appPreName = NriUploadConstant.DR;
+			break;
+		case NriUploadConstant.SIX:
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SALUTATION_IS_06);
+			appPreName = NriUploadConstant.DR_MRS;
+			break;
+		case NriUploadConstant.SEVEN:
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SALUTATION_IS_07);
+			appPreName = NriUploadConstant.MASTER;
+			break;
+		default:
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SALUTATION_IS_OTHER);
+			appPreName = NriUploadConstant.EMPTY;
+			break;
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return appPreName;
+	}
+
+	/**
+	 * Method Name: generateBase64FromPath This method generate Base64 From doc of
+	 * given path
+	 * 
+	 * @param filePath
+	 * @return String
+	 */
+	public String generateBase64FromPath(String filePath) {
+
+		String thisMethod = NriUploadConstant.GENERATE_BASE64_FROM_PATH;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+
+		if (filePath == null || filePath.isEmpty()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.FILE_PATH_IS_NOT_NULL);
+
+			IllegalArgumentException illegalException = new IllegalArgumentException();
+			FLogger.error(Constants.TIER_NAME, NriMainClassUtility.class.getSimpleName(), thisMethod,
+					NriUploadConstant.FILE_PATH_CANNOT_BE_NULL_OR_EMPTY + ExceptionUtils.getStackTrace(illegalException));
+			throw illegalException;
+		}
+		File file = new File(filePath);
+		if (!file.exists()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.FILE_IS_NOT_EXIST);
+
+			IllegalArgumentException illegalException = new IllegalArgumentException();
+			FLogger.error(Constants.TIER_NAME, NriMainClassUtility.class.getSimpleName(), thisMethod,
+					NriUploadConstant.FILE_DOES_NOT_EXIST_AT_THE_SPECIFIED_PATH + ExceptionUtils.getStackTrace(illegalException));
+			return null;
+		}
+		try (FileInputStream fileInputStream = new FileInputStream(file)) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.CHECKING_FILE_INPUT_STREAM);
+			byte[] fileBytes = Files.readAllBytes(file.toPath());
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return Base64.getEncoder().encodeToString(fileBytes);
+		} catch (IOException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.CATCHED_EXCEPTION);
+
+			FLogger.error(Constants.TIER_NAME, NriMainClassUtility.class.getSimpleName(), thisMethod,
+					NriUploadConstant.UNABLE_TO_READ_FILE_OR_CONVERTING_TO_BASE64 + ExceptionUtils.getStackTrace(e));
+			return null;
+		}
+	}
+
+	/**
+	 * Method Name: falgSet This method give String Y or N by given Flag
+	 * 
+	 * @param flag
+	 * @return String
+	 */
+	public String falgSet(boolean flag) {
+		String thisMethod = NriUploadConstant.FALG_SET;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		if (Boolean.TRUE.equals(flag)) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.FLAG_IS_TRUE);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return Constants.AOFFLAG;
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return Constants.FLAG;
+	}
+
+	/**
+	 * Method Name: dateFormatChange Changes the format of a given LocalDateTime to
+	 * a string in the format "dd-MM-yyyy".
+	 * 
+	 * @param dateOldFormat
+	 * @return String
+	 */
+	public String dateFormatChange(LocalDateTime dateOldFormat) {
+		String thisMethod = NriUploadConstant.DATE_FORMAT_CHANGE;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		String dateNewFormat = NriUploadConstant.EMPTY;
+		if (dateOldFormat != null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.DATE_GIVEN_IS_NOT_NULL);
+			LocalDateTime dateTime = LocalDateTime.parse(dateOldFormat.toString(),
+					DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+			dateNewFormat = dateTime.format(DateTimeFormatter.ofPattern(NriUploadConstant.DD_MM_YYYY));
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,Constants.METHOD_END);
+		return dateNewFormat;
+	}
+
+	/**
+	 * Method Name: createEdmsRequest Creates an EDMS request by mapping document
+	 * details to the corresponding fields in the RequestBean.
+	 * 
+	 * @param documents
+	 * @param bean
+	 * @param cif
+	 * @param ckycNumber
+	 */
+	public void createEdmsRequest(EdmsDocDetails documents, RequestBeanNRI bean, String cif, Long ckycNumber) {
+		String thisMethod = NriUploadConstant.CREATE_EDMS_REQUEST;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		
+		switch (documents.getDocEdmsMap()) {
+		case NriUploadConstant.AOF: {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.AOF_APPENDED_IN_BEAN);
+			CommNstdReqBean2 mapDocumentToJson = mapDocumentToJson2(bean.getAOF(), documents, cif, ckycNumber);
+			bean.setAOF(mapDocumentToJson);
+			break;
+		}
+		case NriUploadConstant.COMBINE: {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.COMBINE_APPENDED_IN_BEAN);
+			if (documents.getFileName().contains(NriUploadConstant.PDF)) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.COMBINE_APPENDED_IN_BEAN_AS_OTHERS_1);
+				
+				CommNstdReqBean mapDocumentToJson = mapDocumentToJson(bean.getKYC_1(), documents, cif, ckycNumber);
+				mapDocumentToJson.setFileName("000000"+cif + "_KYC_1_36.pdf");
+				bean.setKYC_1(mapDocumentToJson);
+			}
+			break;
+		}
+		case "Visa": {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.COMBINE_APPENDED_IN_BEAN);
+			if (documents.getFileName().contains("jpeg")) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.COMBINE_APPENDED_IN_BEAN_AS_OTHERS_1);
+				CommNstdReqBean mapDocumentToJson = mapDocumentToJson(bean.getOthers_2(), documents, cif, ckycNumber);
+				mapDocumentToJson.setFileName("000000"+cif + "_Others_2.jpeg");
+				bean.setOthers_2(mapDocumentToJson);
+			}
+			break;
+		}
+		case "Cnst_Clause": {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.CRIF_APPENDED_IN_BEAN);
+			CommNstdReqBean mapDocumentToJson = mapDocumentToJson(bean.getOthers_3(), documents, cif, ckycNumber);
+			mapDocumentToJson.setFileName("000000"+cif + "_Others_3.pdf");
+			bean.setOthers_3(mapDocumentToJson);
+			break;
+		}
+		case "KYC": {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.CRIF_APPENDED_IN_BEAN);
+			CommNstdReqBean mapDocumentToJson = mapDocumentToJson(bean.getOthers_1(), documents, cif, ckycNumber);
+			bean.setOthers_1(mapDocumentToJson);
+			mapDocumentToJson.setFileName("000000"+cif + "_Others_1.pdf");
+			break;
+		}
+		case "CIS": {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.CRIF_APPENDED_IN_BEAN);
+			CommNstdReqBean mapDocumentToJson = mapDocumentToJson(bean.getCIS(), documents, cif, ckycNumber);
+			bean.setCIS(mapDocumentToJson);
+			break;
+		}
+		
+		
+
+		default:
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.IN_DEFAULT_CASE);
+			break;
+		}
+		
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+	}
+
+	/**
+	 * Method Name: mapDocumentToJson It assign Document Details to Edms request
+	 * 
+	 * @param commNstdReqBean
+	 * @param documents
+	 * @param cif
+	 * @param ckycNumber
+	 * @return CommNstdReqBean
+	 */
+	public CommNstdReqBean mapDocumentToJson(CommNstdReqBean commNstdReqBean, EdmsDocDetails documents, String cif,
+			Long ckycNumber) {
+		String thisMethod = NriUploadConstant.MAP_DOCUMENT_TO_JSON;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		if (commNstdReqBean == null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.COMM_NSTD_REQ_BEAN_IS_NOT_NULL);
+			commNstdReqBean = new CommNstdReqBean();
+		}
+		String subStr = documents.getFileName().substring(documents.getFileName().indexOf(NriUploadConstant.UNDERSCORE));
+		String fileName = "000000"+cif + subStr;
+		if (subStr.contains(NriUploadConstant.COMBINE_PDF)) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.COMBINE_PDF2);
+			fileName = "000000"+cif + NriUploadConstant.OTHERS_1_PDF;
+		} else if (subStr.contains(NriUploadConstant.COMBINE_JPEG)) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.COMBINE_JPEG2);
+			fileName = "000000"+cif + NriUploadConstant.KYC_2_JPEG;
+		}
+
+		commNstdReqBean.setCersaiFlag(documents.isCersaiFlag() ? NriUploadConstant.Y : NriUploadConstant.N);
+		commNstdReqBean.setArchivalFlag(documents.isArchivalFlag() ? NriUploadConstant.Y : NriUploadConstant.N);
+		commNstdReqBean.setCkycNumber(ckycNumber);
+		commNstdReqBean.setDocumentCategory(documents.getDocCategory() != null ? documents.getDocCategory() : NriUploadConstant.EMPTY);
+		commNstdReqBean.setDocumentCode(documents.getDocCode() != null ? documents.getDocCode() : NriUploadConstant.EMPTY);
+		commNstdReqBean.setDocumentIdentifier(documents.getDocIdentifier() != null ? documents.getDocIdentifier() : NriUploadConstant.EMPTY);
+		commNstdReqBean.setDocumentType(documents.getDocType() != null ? documents.getDocType() : NriUploadConstant.EMPTY);
+		commNstdReqBean.setFileName(fileName != null ? fileName : NriUploadConstant.EMPTY);
+		commNstdReqBean.setIdNumber(documents.getIdNo() != null ? documents.getIdNo() : NriUploadConstant.EMPTY);
+		commNstdReqBean.setIdType(documents.getDocType() != null ? documents.getDocType() :NriUploadConstant.EMPTY);
+		commNstdReqBean.setBase64Str(generateBase64FromPath(documents.getFilePath()));
+		commNstdReqBean.setDocumentExpiryDate(dateFormatChange(documents.getDocExpiryDate()));
+		commNstdReqBean.setScannedDate(dateFormatChange(documents.getScannedDate()));
+
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,Constants.METHOD_END);
+		return commNstdReqBean;
+	}
+
+	/**
+	 * Method Name: mapDocumentToJson2 It assign Document Details to Edms request
+	 * 
+	 * @param commNstdReqBean2
+	 * @param documents
+	 * @param cif
+	 * @param ckycNumber
+	 * @return CommNstdReqBean2
+	 * @throws ServiceBusinessException
+	 */
+	public CommNstdReqBean2 mapDocumentToJson2(CommNstdReqBean2 commNstdReqBean2, EdmsDocDetails documents, String cif,
+			Long ckycNumber) {
+		String thisMethod = NriUploadConstant.MAP_DOCUMENT_TO_JSON;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		if (commNstdReqBean2 == null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.COMM_NSTD_REQ_BEAN2_IS_NOT_NULL);
+			commNstdReqBean2 = new CommNstdReqBean2();
+		}
+		String fileName = "000000"+cif + documents.getFileName().substring(documents.getFileName().indexOf(NriUploadConstant.UNDERSCORE));
+		commNstdReqBean2.setCersaiFlag(documents.isCersaiFlag() ? NriUploadConstant.Y : NriUploadConstant.N);
+		commNstdReqBean2.setArchivalFlag(documents.isArchivalFlag() ? NriUploadConstant.Y : NriUploadConstant.N);
+		commNstdReqBean2.setComments(documents.getComments() != null ? documents.getComments() : NriUploadConstant.EMPTY);
+		commNstdReqBean2.setCkycNumber(ckycNumber);
+		commNstdReqBean2.setDocumentCategory(documents.getDocCategory() != null ? documents.getDocCategory() : NriUploadConstant.EMPTY);
+		commNstdReqBean2.setDocumentCode(documents.getDocCode() != null ? documents.getDocCode() : NriUploadConstant.EMPTY);
+		commNstdReqBean2
+				.setDocumentIdentifier(documents.getDocIdentifier() != null ? documents.getDocIdentifier() : NriUploadConstant.EMPTY);
+		commNstdReqBean2.setDocumentType(documents.getDocType() != null ? documents.getDocType() : NriUploadConstant.EMPTY);
+		commNstdReqBean2.setFileName(fileName != null ? fileName :NriUploadConstant.EMPTY);
+		commNstdReqBean2.setIdNumber(documents.getIdNo() != null ? documents.getIdNo() : NriUploadConstant.EMPTY);
+		commNstdReqBean2.setIdType(documents.getDocType() != null ? documents.getDocType() : NriUploadConstant.EMPTY);
+		commNstdReqBean2.setBase64Str(generateBase64FromPath(documents.getFilePath()));
+		commNstdReqBean2.setDocumentExpiryDate(dateFormatChange(documents.getDocExpiryDate()));
+		commNstdReqBean2.setScannedDate(dateFormatChange(documents.getScannedDate()));
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return commNstdReqBean2;
+	}
+
+	/**
+	 * Method Name: determineDocTypes give String array of doc type
+	 * 
+	 * @param documents
+	 * @param leadIdPresent
+	 * @return String array
+	 */
+	public String[] determineDocTypes(List<EdmsDocDetails> documents, boolean leadIdPresent) {
+		String photoDocType = null;
+		String signDocType = null;
+		String thisMethod = NriUploadConstant.DETERMINE_DOC_TYPES;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.DETERMINING_DOCUMENT_TYPES);
+
+		for (EdmsDocDetails docDetails : documents) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.PROCESSING_DOCUMENT_ID + docDetails.getDocId());
+
+			if (photoDocType == null) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.PHOTO_DOC_TYPE_NOT_PRESENT);
+				photoDocType = photoDocTypeSet(photoDocType, docDetails);
+			}
+			if (signDocType == null) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SIGN_DOC_TYPE_NOT_PRESENT);
+				signDocType = signDocTypeSet(signDocType, docDetails, leadIdPresent);
+			}
+			if (photoDocType != null && signDocType != null) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						NriUploadConstant.PHOTO_DOC_TYPE_SIGN_DOC_TYPE_IS_PRESENT);
+				break;
+			}
+		}
+
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+				NriUploadConstant.DETERMINED_DOCUMENT_TYPES_PHOTO + photoDocType + NriUploadConstant.SIGN2 + signDocType);
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return new String[] { photoDocType, signDocType };
+	}
+
+	/**
+	 * Method Name: photoDocTypeSet give String array of photo doc type
+	 * 
+	 * @param photoDocType
+	 * @param docDetails
+	 * @return String
+	 */
+	public String photoDocTypeSet(String photoDocType, EdmsDocDetails docDetails) {
+		String thisMethod = NriUploadConstant.PHOTO_DOC_TYPE_SET;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+
+		if (docDetails.getDocId().equals(Constants.IDTYPE21)) {
+			photoDocType = Constants.IDTYPE21;
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.PHOTO_DOCUMENT_TYPE_SET_TO_DC_021);
+		} else if (docDetails.getDocId().equals(Constants.IDTYPE04)) {
+			photoDocType = Constants.IDTYPE04;
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.PHOTO_DOCUMENT_TYPE_SET_TO_DC_004);
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return photoDocType;
+	}
+
+	/**
+	 * Method Name: photoDocTypeSet give String array of photo doc type
+	 * 
+	 * @param signDocType
+	 * @param docDetails
+	 * @param leadIdPresent
+	 * @return String
+	 */
+	public String signDocTypeSet(String signDocType, EdmsDocDetails docDetails, boolean leadIdPresent) {
+		String thisMethod = NriUploadConstant.SIGN_DOC_TYPE_SET;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+
+		if (!leadIdPresent) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.LEAD_ID_PRESENT_IN_MKR_CHECKER_AS_BRANCH);
+			if (docDetails.getDocId().equals(Constants.IDTYPE23)) {
+				signDocType = Constants.IDTYPE23;
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SIGN_DOCUMENT_TYPE_SET_TO_DC_023);
+			}
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.LEAD_ID_NOT_PRESENT_IN_MKR_CHECKER);
+			if (docDetails.getDocId().equals(Constants.IDTYPE22)) {
+				signDocType = Constants.IDTYPE22;
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SIGN_DOCUMENT_TYPE_SET_TO_DC_022);
+			} else if (docDetails.getDocId().equals(Constants.IDTYPE05)) {
+				signDocType = Constants.IDTYPE05;
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, NriUploadConstant.SIGN_DOCUMENT_TYPE_SET_TO_DC_005);
+			}
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return signDocType;
+	}
+	
+	public ReqBean videoMethod(EdmsDocDetails docDetails, ReqBean videoBean, RequestBeanNRI bean) {
+		String thisMethod = RekycUploadConstants.VIDEO_METHOD;
+		FLogger.info(Constants.TIER_NAME1, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		String generateBase64FromPath = generateBase64FromPath(docDetails.getFilePath());
+		videoBean.setBase64(generateBase64FromPath);
+		String subStr = docDetails.getFileName().substring(docDetails.getFileName().indexOf(RekycUploadConstants.UNDERSCORE));
+		videoBean.setDocTitle(bean.getCifNumber() + subStr);
+		if (videoBean.getBase64() != null) {
+			FLogger.info(Constants.TIER_NAME1, this.getClass().getName(), thisMethod, RekycUploadConstants.VIDEO_BEAN_CONTAINS_BASE64);
+			videoBean.setBranchCode(bean.getBranchCode() != null ? bean.getBranchCode() : RekycUploadConstants.EMPTY_STRING);
+			videoBean.setChannelId(bean.getChannelId() != null ? bean.getChannelId() : RekycUploadConstants.EMPTY_STRING);
+			videoBean.setCifNumber(
+					bean.getCifNumber() != null ? String.format(RekycUploadConstants.ZERO_ONE_SEVEN_D, Long.parseLong(bean.getCifNumber())) : RekycUploadConstants.EMPTY_STRING);
+		}
+		FLogger.info(Constants.TIER_NAME1, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return videoBean;
+	}
+
+}
