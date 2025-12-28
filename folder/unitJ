@@ -1,6 +1,97 @@
 package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sbi.yono.document.savingsaccount.edms.bean.ReqBean;
+import com.sbi.yono.document.savingsaccount.edms.bean.RequestBeanNRI;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+import com.sbi.yono.document.savingsaccount.edms.rekycupload.RekycUploadConstants;
+
+@ExtendWith(MockitoExtension.class)
+class NriMainClassUtilityVideoMethodTest {
+
+    @Spy
+    private NriMainClassUtility utility;
+
+    @Mock
+    private EdmsDocDetails docDetails;
+
+    @Mock
+    private RequestBeanNRI requestBean;
+
+    @Mock
+    private ReqBean videoBean;
+
+    // ================= BASE64 PRESENT =================
+    @Test
+    void testVideoMethod_base64Present() {
+
+        when(docDetails.getFilePath()).thenReturn("/dummy/video.mp4");
+        when(docDetails.getFileName()).thenReturn("VID_12345.mp4");
+
+        when(requestBean.getCifNumber()).thenReturn("12345");
+        when(requestBean.getBranchCode()).thenReturn("001");
+        when(requestBean.getChannelId()).thenReturn("YONO");
+
+        doReturn("BASE64_VIDEO")
+                .when(utility)
+                .generateBase64FromPath(any());
+
+        utility.videoMethod(docDetails, videoBean, requestBean);
+
+        verify(videoBean).setBase64("BASE64_VIDEO");
+        verify(videoBean).setDocTitle("12345_12345.mp4");
+        verify(videoBean).setBranchCode("001");
+        verify(videoBean).setChannelId("YONO");
+        verify(videoBean).setCifNumber("00000000000012345");
+    }
+
+    // ================= BASE64 NULL =================
+    @Test
+    void testVideoMethod_base64Null() {
+
+        when(docDetails.getFilePath()).thenReturn("/dummy/video.mp4");
+        when(docDetails.getFileName()).thenReturn("VID_999.mp4");
+
+        doReturn(null)
+                .when(utility)
+                .generateBase64FromPath(any());
+
+        ReqBean result =
+                utility.videoMethod(docDetails, videoBean, requestBean);
+
+        verify(videoBean).setBase64(null);
+        verify(videoBean).setDocTitle("null_999.mp4");
+
+        assertNotNull(result);
+        assertEquals(videoBean, result);
+    }
+}
+
+
+
+
+
+
+
+
+
+gggggggggggg
+
+package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 
