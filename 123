@@ -1,3 +1,141 @@
+package com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sbi.yono.document.savingsaccount.edms.bean.EDMSResponse;
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsUploadDocRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsUploadDoc;
+import com.sbi.yono.document.savingsaccount.edms.nrinroupload.NriMainClassSvc;
+import com.sbi.yono.document.savingsaccount.edms.nrinroupload.NriUploadConstant;
+import com.sbi.yono.document.savingsaccount.edms.utility.CmnParamsConst;
+import com.sbi.yono.document.savingsaccount.edms.utility.SaveEdmsResponse;
+
+@ExtendWith(MockitoExtension.class)
+class NriMainClassSvcAddingValuesInUploadDocTest {
+
+    @Mock
+    private EdmsUploadDocRepo docRepoEdmsUploadDocRepo;
+
+    @Mock
+    private SaveEdmsResponse saveResp;
+
+    @InjectMocks
+    private NriMainClassSvc service;
+
+    // --------------------------------------------------
+    // 🔧 COMMON STATIC CONFIG MOCK
+    // --------------------------------------------------
+    private MockedStatic<CmnParamsConst> mockChannelConfig() {
+
+        Map<String, String> map = new HashMap<>();
+        map.put(Constants.ETB_APPWEB_CA_KEY, "CH1");
+        map.put(Constants.ETB_BRANCH_CA_KEY, "CH2");
+        map.put(Constants.ETB_APPWEB_SA_KEY, "CH3");
+        map.put(Constants.ETB_BRANCH_SA_KEY, "CH4");
+
+        MockedStatic<CmnParamsConst> mocked = mockStatic(CmnParamsConst.class);
+        mocked.when(CmnParamsConst::getMap).thenReturn(map);
+        return mocked;
+    }
+
+    // ==================================================
+    // 1️⃣ SUCCESS → responseCode = 00
+    // ==================================================
+    @Test
+    void addingValues_successResponse_shouldMarkUploaded() {
+
+        try (MockedStatic<CmnParamsConst> ignored = mockChannelConfig()) {
+
+            EdmsUploadDoc uploadDoc = new EdmsUploadDoc();
+
+            EDMSResponse response = new EDMSResponse();
+            response.setResponseCode(Constants.RESPNOSECODE_00);
+
+            service.addingValuesInUploadDoc(uploadDoc, response, "CH1");
+
+            verify(docRepoEdmsUploadDocRepo).save(uploadDoc);
+            verify(saveResp).saveEdmsResp(Constants.RESPNOSECODE_00, uploadDoc);
+        }
+    }
+
+    // ==================================================
+    // 2️⃣ FAILURE → responseCode != 00
+    // ==================================================
+    @Test
+    void addingValues_failureResponse_shouldSetResponseStatus() {
+
+        try (MockedStatic<CmnParamsConst> ignored = mockChannelConfig()) {
+
+            EdmsUploadDoc uploadDoc = new EdmsUploadDoc();
+
+            EDMSResponse response = new EDMSResponse();
+            response.setResponseCode("12");
+
+            service.addingValuesInUploadDoc(uploadDoc, response, "CH2");
+
+            verify(docRepoEdmsUploadDocRepo).save(uploadDoc);
+            verify(saveResp).saveEdmsResp("12", uploadDoc);
+        }
+    }
+
+    // ==================================================
+    // 3️⃣ NULL RESPONSE
+    // ==================================================
+    @Test
+    void addingValues_nullResponse_shouldGoToElseBlock() {
+
+        try (MockedStatic<CmnParamsConst> ignored = mockChannelConfig()) {
+
+            EdmsUploadDoc uploadDoc = new EdmsUploadDoc();
+
+            service.addingValuesInUploadDoc(uploadDoc, null, "CH3");
+
+            verify(saveResp)
+                    .saveEdmsResp(NriUploadConstant.ONE_THOUSAND_TWO, uploadDoc);
+
+            verifyNoInteractions(docRepoEdmsUploadDocRepo);
+        }
+    }
+
+    // ==================================================
+    // 4️⃣ CHANNEL NOT IN LIST
+    // ==================================================
+    @Test
+    void addingValues_invalidChannel_shouldGoToElseBlock() {
+
+        try (MockedStatic<CmnParamsConst> ignored = mockChannelConfig()) {
+
+            EdmsUploadDoc uploadDoc = new EdmsUploadDoc();
+
+            EDMSResponse response = new EDMSResponse();
+            response.setResponseCode(Constants.RESPNOSECODE_00);
+
+            service.addingValuesInUploadDoc(uploadDoc, response, "INVALID_CH");
+
+            verify(saveResp)
+                    .saveEdmsResp(NriUploadConstant.ONE_THOUSAND_TWO, uploadDoc);
+
+            verifyNoInteractions(docRepoEdmsUploadDocRepo);
+        }
+    }
+}
+
+
+
+
+******
 public void addingValuesInUploadDoc(EdmsUploadDoc edmsUploadDoc, EDMSResponse docUploadRes, String channelID) {
 		String thisMethod = NriUploadConstant.ADDING_VALUES_IN_UPLOAD_DOC;
 		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
