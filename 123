@@ -1,6 +1,138 @@
 package com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+import java.time.LocalDateTime;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sbi.yono.document.savingsaccount.edms.bean.EDMSResponse;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsUploadDocRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsUploadDoc;
+import com.sbi.yono.document.savingsaccount.edms.nrinroupload.NriMainClassSvc;
+
+@ExtendWith(MockitoExtension.class)
+class NriMainClassSvcAddValuesUploadDocTest {
+
+    @Mock
+    private EdmsUploadDocRepo docRepoEdmsUploadDocRepo;
+
+    @InjectMocks
+    private NriMainClassSvc service;
+
+    // ==================================================
+    // 1️⃣ SUCCESS RESPONSE
+    // ==================================================
+    @Test
+    void addingValuesInUploadDoc_whenSuccessResponse_shouldMarkSuccess() {
+
+        // Arrange
+        EdmsUploadDoc uploadDoc = new EdmsUploadDoc();
+        uploadDoc.setRefNo("REF123");
+
+        EDMSResponse response = new EDMSResponse();
+        response.setResponseCode("200");
+        response.setResponseMessage("SUCCESS");
+
+        when(docRepoEdmsUploadDocRepo.save(any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        // Act
+        service.addingValuesInUploadDoc(uploadDoc, response, "Y2ND");
+
+        // Assert
+        assertEquals("Y", uploadDoc.getUploadStatus()); // or true / SUCCESS as per your entity
+        assertEquals("200", uploadDoc.getRespCode());
+        assertEquals("SUCCESS", uploadDoc.getRespMessage());
+        assertNotNull(uploadDoc.getUpdtdDate());
+
+        verify(docRepoEdmsUploadDocRepo).save(uploadDoc);
+    }
+
+    // ==================================================
+    // 2️⃣ FAILURE RESPONSE
+    // ==================================================
+    @Test
+    void addingValuesInUploadDoc_whenFailureResponse_shouldMarkFailed() {
+
+        EdmsUploadDoc uploadDoc = new EdmsUploadDoc();
+        uploadDoc.setRefNo("REF456");
+
+        EDMSResponse response = new EDMSResponse();
+        response.setResponseCode("500");
+        response.setResponseMessage("FAILED");
+
+        when(docRepoEdmsUploadDocRepo.save(any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.addingValuesInUploadDoc(uploadDoc, response, "Y2ND");
+
+        assertEquals("N", uploadDoc.getUploadStatus());
+        assertEquals("500", uploadDoc.getRespCode());
+        assertEquals("FAILED", uploadDoc.getRespMessage());
+        assertNotNull(uploadDoc.getUpdtdDate());
+
+        verify(docRepoEdmsUploadDocRepo).save(uploadDoc);
+    }
+
+    // ==================================================
+    // 3️⃣ NULL RESPONSE (IMPORTANT EDGE CASE)
+    // ==================================================
+    @Test
+    void addingValuesInUploadDoc_whenResponseIsNull_shouldHandleGracefully() {
+
+        EdmsUploadDoc uploadDoc = new EdmsUploadDoc();
+        uploadDoc.setRefNo("REF789");
+
+        when(docRepoEdmsUploadDocRepo.save(any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.addingValuesInUploadDoc(uploadDoc, null, "Y2ND");
+
+        assertEquals("N", uploadDoc.getUploadStatus());
+        assertNotNull(uploadDoc.getUpdtdDate());
+
+        verify(docRepoEdmsUploadDocRepo).save(uploadDoc);
+    }
+
+    // ==================================================
+    // 4️⃣ CHANNEL-SPECIFIC LOGIC (IF ANY)
+    // ==================================================
+    @Test
+    void addingValuesInUploadDoc_whenDifferentChannel_shouldStillSave() {
+
+        EdmsUploadDoc uploadDoc = new EdmsUploadDoc();
+        uploadDoc.setRefNo("REF999");
+
+        EDMSResponse response = new EDMSResponse();
+        response.setResponseCode("200");
+
+        when(docRepoEdmsUploadDocRepo.save(any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.addingValuesInUploadDoc(uploadDoc, response, "Y1ABC");
+
+        assertEquals("Y", uploadDoc.getUploadStatus());
+        verify(docRepoEdmsUploadDocRepo).save(uploadDoc);
+    }
+}
+
+
+
+
+
+
+
+_________
+package com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest;
+
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
