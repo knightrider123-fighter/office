@@ -1,3 +1,178 @@
+package com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.Base64;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sbi.yono.document.savingsaccount.edms.bean.ReqBean;
+import com.sbi.yono.document.savingsaccount.edms.bean.RequestBeanNRI;
+import com.sbi.yono.document.savingsaccount.edms.nrinroupload.NriMainClassSvc;
+
+@ExtendWith(MockitoExtension.class)
+class NriMainClassSvcMapDocumentTest {
+
+    @Spy
+    @InjectMocks
+    private NriMainClassSvc service;
+
+    // ==================================================
+    // 1️⃣ SUCCESS CASE – Docs + Video + Lead present
+    // ==================================================
+    @Test
+    void mapDocument_success_withLeadPresentAndVideo() {
+
+        String[] docs = {
+                "doc1.pdf",
+                "video.mp4"
+        };
+
+        RequestBeanNRI bean = new RequestBeanNRI();
+        ReqBean videoBean = new ReqBean();
+
+        Object[] result = service.mapDocument(
+                docs,
+                "REF123",
+                bean,
+                videoBean,
+                true,
+                "123456",
+                987654321L
+        );
+
+        assertNotNull(result);
+        assertEquals(2, result.length);
+
+        RequestBeanNRI resultBean = (RequestBeanNRI) result[0];
+        ReqBean resultVideoBean = (ReqBean) result[1];
+
+        assertNotNull(resultBean);
+        assertNotNull(resultVideoBean);
+
+        // CIF & CKYC should be set
+        assertEquals("123456", resultBean.getCif());
+        assertEquals(987654321L, resultBean.getCkycNo());
+
+        // Video base64 should be populated
+        assertNotNull(resultVideoBean.getBase64());
+    }
+
+    // ==================================================
+    // 2️⃣ Lead NOT present
+    // ==================================================
+    @Test
+    void mapDocument_whenLeadNotPresent_shouldStillMapDocs() {
+
+        String[] docs = { "doc1.pdf" };
+
+        RequestBeanNRI bean = new RequestBeanNRI();
+        ReqBean videoBean = new ReqBean();
+
+        Object[] result = service.mapDocument(
+                docs,
+                "REF456",
+                bean,
+                videoBean,
+                false,
+                "",
+                0L
+        );
+
+        RequestBeanNRI resultBean = (RequestBeanNRI) result[0];
+
+        assertNotNull(resultBean);
+        assertNull(resultBean.getCif());
+    }
+
+    // ==================================================
+    // 3️⃣ Video NOT present
+    // ==================================================
+    @Test
+    void mapDocument_whenNoVideo_shouldNotSetVideoBase64() {
+
+        String[] docs = { "doc1.pdf", "doc2.pdf" };
+
+        RequestBeanNRI bean = new RequestBeanNRI();
+        ReqBean videoBean = new ReqBean();
+
+        Object[] result = service.mapDocument(
+                docs,
+                "REF789",
+                bean,
+                videoBean,
+                true,
+                "999999",
+                111L
+        );
+
+        ReqBean resultVideoBean = (ReqBean) result[1];
+
+        assertNull(resultVideoBean.getBase64());
+    }
+
+    // ==================================================
+    // 4️⃣ EMPTY DOC ARRAY
+    // ==================================================
+    @Test
+    void mapDocument_whenDocsEmpty_shouldReturnBeansSafely() {
+
+        String[] docs = {};
+
+        RequestBeanNRI bean = new RequestBeanNRI();
+        ReqBean videoBean = new ReqBean();
+
+        Object[] result = service.mapDocument(
+                docs,
+                "REF000",
+                bean,
+                videoBean,
+                false,
+                null,
+                null
+        );
+
+        assertNotNull(result);
+        assertEquals(2, result.length);
+        assertNotNull(result[0]);
+        assertNotNull(result[1]);
+    }
+
+    // ==================================================
+    // 5️⃣ NULL CKYC & CIF
+    // ==================================================
+    @Test
+    void mapDocument_whenCkycAndCifNull_shouldNotFail() {
+
+        String[] docs = { "doc1.pdf" };
+
+        RequestBeanNRI bean = new RequestBeanNRI();
+        ReqBean videoBean = new ReqBean();
+
+        Object[] result = service.mapDocument(
+                docs,
+                "REFNULL",
+                bean,
+                videoBean,
+                true,
+                null,
+                null
+        );
+
+        RequestBeanNRI resultBean = (RequestBeanNRI) result[0];
+
+        assertNotNull(resultBean);
+        assertNull(resultBean.getCif());
+        assertNull(resultBean.getCkycNo());
+    }
+}
+
+
+
 public Object[] mapDocument(String[] docs, String currentLead, RequestBeanNRI bean, ReqBean videoBean,
 			boolean leadIdPresent, String cif, Long ckycNumber) {
 		String thisMethod = NriUploadConstant.MAP_DOCUMENT;
