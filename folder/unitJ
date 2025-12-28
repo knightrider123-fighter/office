@@ -1,3 +1,150 @@
+@ExtendWith(MockitoExtension.class)
+class NriMainClassUtilityCreateEdmsRequestTest {
+
+    @Spy
+    private NriMainClassUtility utility;
+
+    @Mock
+    private EdmsDocDetails docDetails;
+
+    @Mock
+    private RequestBeanNRI requestBean;
+
+    @Mock
+    private CommNstdReqBean commNstdReqBean;
+
+    private static final String CIF = "1234567890";
+    private static final Long CKYC = 123456789012L;
+
+    // ================= AOF =================
+    @Test
+    void testCreateEdmsRequest_AOF() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn(NriUploadConstant.AOF);
+        when(requestBean.getAOF()).thenReturn(null);
+
+        doReturn(commNstdReqBean)
+                .when(utility)
+                .mapDocumentToJson(any(), eq(docDetails), eq(CIF), eq(CKYC));
+
+        utility.createEdmsRequest(docDetails, requestBean, CIF, CKYC);
+
+        verify(requestBean).setAOF(commNstdReqBean);
+    }
+
+    // ================= COMBINE PDF =================
+    @Test
+    void testCreateEdmsRequest_COMBINE_pdf() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn(NriUploadConstant.COMBINE);
+        when(docDetails.getFileName()).thenReturn("abc_COMBINE.pdf");
+        when(requestBean.getKYC_1()).thenReturn(null);
+
+        doReturn(commNstdReqBean)
+                .when(utility)
+                .mapDocumentToJson(any(), eq(docDetails), eq(CIF), eq(CKYC));
+
+        utility.createEdmsRequest(docDetails, requestBean, CIF, CKYC);
+
+        verify(commNstdReqBean)
+                .setFileName("000000" + CIF + "_KYC_1_36.pdf");
+        verify(requestBean).setKYC_1(commNstdReqBean);
+    }
+
+    // ================= VISA JPEG =================
+    @Test
+    void testCreateEdmsRequest_Visa_jpeg() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn("Visa");
+        when(docDetails.getFileName()).thenReturn("visa.jpeg");
+        when(requestBean.getOthers_2()).thenReturn(null);
+
+        doReturn(commNstdReqBean)
+                .when(utility)
+                .mapDocumentToJson(any(), eq(docDetails), eq(CIF), eq(CKYC));
+
+        utility.createEdmsRequest(docDetails, requestBean, CIF, CKYC);
+
+        verify(commNstdReqBean)
+                .setFileName("000000" + CIF + "_Others_2.jpeg");
+        verify(requestBean).setOthers_2(commNstdReqBean);
+    }
+
+    // ================= CNST_CLAUSE =================
+    @Test
+    void testCreateEdmsRequest_CnstClause() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn("Cnst_Clause");
+        when(requestBean.getOthers_3()).thenReturn(null);
+
+        doReturn(commNstdReqBean)
+                .when(utility)
+                .mapDocumentToJson(any(), eq(docDetails), eq(CIF), eq(CKYC));
+
+        utility.createEdmsRequest(docDetails, requestBean, CIF, CKYC);
+
+        verify(commNstdReqBean)
+                .setFileName("000000" + CIF + "_Others_3.pdf");
+        verify(requestBean).setOthers_3(commNstdReqBean);
+    }
+
+    // ================= KYC =================
+    @Test
+    void testCreateEdmsRequest_KYC() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn("KYC");
+        when(requestBean.getOthers_1()).thenReturn(null);
+
+        doReturn(commNstdReqBean)
+                .when(utility)
+                .mapDocumentToJson(any(), eq(docDetails), eq(CIF), eq(CKYC));
+
+        utility.createEdmsRequest(docDetails, requestBean, CIF, CKYC);
+
+        verify(commNstdReqBean)
+                .setFileName("000000" + CIF + "_Others_1.pdf");
+        verify(requestBean).setOthers_1(commNstdReqBean);
+    }
+
+    // ================= CIS =================
+    @Test
+    void testCreateEdmsRequest_CIS() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn("CIS");
+        when(requestBean.getCIS()).thenReturn(null);
+
+        doReturn(commNstdReqBean)
+                .when(utility)
+                .mapDocumentToJson(any(), eq(docDetails), eq(CIF), eq(CKYC));
+
+        utility.createEdmsRequest(docDetails, requestBean, CIF, CKYC);
+
+        verify(requestBean).setCIS(commNstdReqBean);
+    }
+
+    // ================= DEFAULT =================
+    @Test
+    void testCreateEdmsRequest_defaultCase() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn("UNKNOWN");
+
+        utility.createEdmsRequest(docDetails, requestBean, CIF, CKYC);
+
+        verify(utility, never())
+                .mapDocumentToJson(any(), any(), any(), any());
+
+        verifyNoInteractions(requestBean);
+    }
+}
+
+
+
+
+
+
+
+tttttttttttttt
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.LocalDateTime;
