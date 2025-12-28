@@ -1,5 +1,218 @@
 package com.sbi.yono.document.savingsaccount.edms.ntbupload;
 
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.io.File;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.cert.X509Certificate;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sbi.yono.account.savingsaccount.accntopening.ekycpdf.CustomerOnboarding;
+import com.sbi.yono.account.savingsaccount.accntopening.ekycpdf.CustomerOnboardingRepository;
+import com.sbi.yono.account.savingsaccount.accntopening.ekycpdf.EKYCSvc;
+import com.sbi.yono.document.savingsaccount.edms.bean.EDMSResponse;
+import com.sbi.yono.document.savingsaccount.edms.bean.ReqBean;
+import com.sbi.yono.document.savingsaccount.edms.bean.RequestBean;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.AccOnbrdingRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.CustOnbrdingRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.OvdRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.CustomerOnbrding;
+import com.sbi.yono.document.savingsaccount.edms.entity.OvdDtls;
+import com.sbi.yono.document.savingsaccount.edms.upload.Audit;
+import com.sbi.yono.document.savingsaccount.edms.upload.CallApi;
+import com.sbi.yono.document.savingsaccount.edms.upload.Details;
+import com.sbi.yono.document.savingsaccount.edms.utility.SaveEdmsResponse;
+import com.tcs.techbone.cryptography.kms.service.KeyManagementService;
+
+@ExtendWith(MockitoExtension.class)
+class NtbRequestTest {
+
+    @Mock
+    private AccOnbrdingRepo accccOnbrdingRepo;
+
+    @Mock
+    private EKYCSvc ekycsvc;
+
+    @Mock
+    private EdmsRepo edmsRepo;
+
+    @Mock
+    private CustomerOnboardingRepository customerOnboardingRepository;
+
+    @Mock
+    private CustOnbrdingRepo custOnbrdingRepo;
+
+    @Mock
+    private OvdRepo ovdRepo;
+
+    @Mock
+    private Details details;
+
+    @Mock
+    private CallApi callApi;
+
+    @Mock
+    private SaveEdmsResponse saveResp;
+
+    @Mock
+    private Audit audit;
+
+    @InjectMocks
+    private NtbRequest ntbRequest;
+
+    @BeforeEach
+    void setUp() {
+        // Inject path manually (used for file path creation)
+        ntbRequest.setPath1("/tmp/");
+    }
+
+    /**
+     * JUnit for FIRST METHOD: callEdms()
+     */
+    @Test
+    void callEdms_successFlow_shouldUploadDocAndVideo() throws Exception {
+
+        // ---------- Arrange ----------
+
+        CustomerOnbrding customer = new CustomerOnbrding();
+        customer.setRef_no("REF123");
+        customer.setBranchCode("001");
+        customer.setChckrId(0);
+        customer.setMkrId(0);
+
+        List<CustomerOnbrding> results = List.of(customer);
+
+        when(accccOnbrdingRepo.findByaccNo("REF123")).thenReturn("123456789");
+        when(accccOnbrdingRepo.findByCifNo("REF123")).thenReturn("987654321");
+
+        when(ovdRepo.findOvdDtls("REF123")).thenReturn(Optional.empty());
+
+        RequestBean requestBean = new RequestBean();
+        requestBean.setChannelId("APP");
+
+        when(details.sendDoc(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any()
+        )).thenReturn(requestBean);
+
+        ReqBean videoReq = new ReqBean();
+        videoReq.setChannelId("APP");
+        videoReq.setBase64("base64Video");
+
+        // Details2 is created using new(), so spy is required
+        NtbRequest spyRequest = Mockito.spy(ntbRequest);
+        doReturn(videoReq)
+                .when(spyRequest)
+                .createVdoc(anyString(), anyString(), anyString());
+
+        EDMSResponse docResponse = new EDMSResponse();
+        docResponse.setResponseCode("00");
+        docResponse.setResponseMsg("DOCUMENTS UPLOADED SUCCESSFULLY");
+
+        EDMSResponse videoResponse = new EDMSResponse();
+        videoResponse.setResponseCode("00");
+        videoResponse.setResponseMsg("NEW DOCUMENT UPLOADED");
+
+        when(callApi.callEDMSAPI(
+                any(),
+                anyString(),
+                any(),
+                any(),
+                anyString()
+        )).thenReturn(docResponse, videoResponse);
+
+        CustomerOnboarding onboarding = new CustomerOnboarding();
+        onboarding.setCheckerId(0);
+        onboarding.setMakerId(0);
+
+        when(customerOnboardingRepository.findByonboardingRefNo("REF123"))
+                .thenReturn(Optional.of(onboarding));
+
+        when(customerOnboardingRepository.findById("REF123"))
+                .thenReturn(Optional.of(onboarding));
+
+        // Mock KMS static calls
+        X509Certificate cert = mock(X509Certificate.class);
+        PublicKey publicKey = mock(PublicKey.class);
+        PrivateKey privateKey = mock(PrivateKey.class);
+
+        when(cert.getPublicKey()).thenReturn(publicKey);
+
+        mockStatic(KeyManagementService.class);
+        when(KeyManagementService.getKeyObject(anyString()))
+                .thenReturn(cert)
+                .thenReturn(privateKey);
+
+        // ---------- Act ----------
+        spyRequest.callEdms(results);
+
+        // ---------- Assert ----------
+
+        verify(custOnbrdingRepo).saveUpdtDate("REF123");
+
+        verify(details).sendDoc(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any()
+        );
+
+        verify(callApi, atLeastOnce()).callEDMSAPI(
+                any(),
+                anyString(),
+                any(),
+                any(),
+                anyString()
+        );
+
+        verify(audit).performAudit(
+                eq("REF123"),
+                any(),
+                eq(docResponse),
+                anyString(),
+                eq("edms_upload_doc_ntb")
+        );
+
+        verify(audit).performVideoAudit(
+                eq("REF123"),
+                any(),
+                eq(videoResponse),
+                anyString(),
+                eq("edms_video_doc_ntb")
+        );
+    }
+}
+
+
+
+
+
+
+
+
+
+ttttttttttt
+
+package com.sbi.yono.document.savingsaccount.edms.ntbupload;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
