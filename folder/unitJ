@@ -1,4 +1,99 @@
+@ExtendWith(MockitoExtension.class)
+class NriMainClassUtilityGetSalutationTest {
 
+    private NriMainClassUtility utility;
+
+    @BeforeEach
+    void setUp() {
+        utility = new NriMainClassUtility();
+    }
+
+    // =============== NULL INPUT =================
+    @Test
+    void testGetSalutation_nullInput() {
+
+        String result = utility.getSalutation(null);
+
+        assertEquals(NriUploadConstant.EMPTY_STRING, result);
+    }
+
+    // =============== CASE 1 =================
+    @Test
+    void testGetSalutation_one() {
+
+        String result = utility.getSalutation(NriUploadConstant.ONE);
+
+        assertEquals(NriUploadConstant.MR, result);
+    }
+
+    // =============== CASE 2 =================
+    @Test
+    void testGetSalutation_two() {
+
+        String result = utility.getSalutation(NriUploadConstant.TWO);
+
+        assertEquals(NriUploadConstant.MRS, result);
+    }
+
+    // =============== CASE 3 =================
+    @Test
+    void testGetSalutation_three() {
+
+        String result = utility.getSalutation(NriUploadConstant.THREE);
+
+        assertEquals(NriUploadConstant.MS, result);
+    }
+
+    // =============== CASE 4 =================
+    @Test
+    void testGetSalutation_four() {
+
+        String result = utility.getSalutation(NriUploadConstant.FOUR);
+
+        assertEquals(NriUploadConstant.MISS, result);
+    }
+
+    // =============== CASE 5 =================
+    @Test
+    void testGetSalutation_five() {
+
+        String result = utility.getSalutation(NriUploadConstant.FIVE);
+
+        assertEquals(NriUploadConstant.DR, result);
+    }
+
+    // =============== CASE 6 =================
+    @Test
+    void testGetSalutation_six() {
+
+        String result = utility.getSalutation(NriUploadConstant.SIX);
+
+        assertEquals(NriUploadConstant.DR_MRS, result);
+    }
+
+    // =============== CASE 7 =================
+    @Test
+    void testGetSalutation_seven() {
+
+        String result = utility.getSalutation(NriUploadConstant.SEVEN);
+
+        assertEquals(NriUploadConstant.MASTER, result);
+    }
+
+    // =============== DEFAULT CASE =================
+    @Test
+    void testGetSalutation_defaultCase() {
+
+        String result = utility.getSalutation("99");
+
+        assertEquals(NriUploadConstant.EMPTY, result);
+    }
+}
+
+
+
+
+////////////
 @ExtendWith(MockitoExtension.class)
 class NriMainClassUtilityTest {
 
