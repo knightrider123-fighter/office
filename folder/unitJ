@@ -1,3 +1,102 @@
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Base64;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+class NriMainClassUtilityGenerateBase64Test {
+
+    private NriMainClassUtility utility;
+
+    @BeforeEach
+    void setUp() {
+        utility = new NriMainClassUtility();
+    }
+
+    // ================= NULL PATH =================
+    @Test
+    void testGenerateBase64FromPath_nullPath() {
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> utility.generateBase64FromPath(null)
+        );
+
+        assertNotNull(ex);
+    }
+
+    // ================= EMPTY PATH =================
+    @Test
+    void testGenerateBase64FromPath_emptyPath() {
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> utility.generateBase64FromPath("")
+        );
+
+        assertNotNull(ex);
+    }
+
+    // ================= FILE DOES NOT EXIST =================
+    @Test
+    void testGenerateBase64FromPath_fileDoesNotExist() {
+
+        String result = utility.generateBase64FromPath("C:/no/such/file/xyz.txt");
+
+        assertNull(result);
+    }
+
+    // ================= VALID FILE =================
+    @Test
+    void testGenerateBase64FromPath_validFile(@TempDir Path tempDir) throws IOException {
+
+        // Arrange
+        Path filePath = tempDir.resolve("sample.txt");
+        String content = "SBI_YONO_NRI_TEST";
+
+        Files.write(filePath, content.getBytes());
+
+        // Expected Base64
+        String expectedBase64 =
+                Base64.getEncoder().encodeToString(content.getBytes());
+
+        // Act
+        String actualBase64 =
+                utility.generateBase64FromPath(filePath.toString());
+
+        // Assert
+        assertNotNull(actualBase64);
+        assertEquals(expectedBase64, actualBase64);
+    }
+
+    // ================= IO EXCEPTION PATH =================
+    @Test
+    void testGenerateBase64FromPath_ioException(@TempDir Path tempDir) {
+
+        // Using directory instead of file causes IOException in readAllBytes
+        File directory = tempDir.toFile();
+
+        String result = utility.generateBase64FromPath(directory.getAbsolutePath());
+
+        assertNull(result);
+    }
+}
+
+
+
+
+
+
+
+
+gghhhhhhhhhh
+
 @ExtendWith(MockitoExtension.class)
 class NriMainClassUtilityGetSalutationTest {
 
