@@ -1,4 +1,116 @@
 @Test
+void createEkycVkyc_ekycAlreadyPresent_shouldNotCreatePdf() throws Exception {
+
+    String cstmrNo = "REF123";
+    String path = "/tmp/";
+
+    CustomerOnbrding cstmr = new CustomerOnbrding();
+    cstmr.setChckrId(0);
+    cstmr.setMkrId(0);
+
+    File ekycFile = mock(File.class);
+    when(ekycFile.exists()).thenReturn(true);
+
+    try (MockedConstruction<File> mockedFile =
+                 mockConstruction(File.class, (mock, context) -> {
+                     when(mock.exists()).thenReturn(true);
+                 })) {
+
+        ntbRequest.createEkycVkyc(cstmr, cstmrNo, path);
+
+        verify(ekycsvc, never()).pdfCreationEkyc(anyString());
+        verify(ekycsvc, never()).pdfCreationvkyc(anyString());
+    }
+}
+
+@Test
+void createEkycVkyc_ekycNotPresent_shouldCreateEkycPdf() throws Exception {
+
+    String cstmrNo = "REF123";
+    String path = "/tmp/";
+
+    CustomerOnbrding cstmr = new CustomerOnbrding();
+    cstmr.setChckrId(1);
+    cstmr.setMkrId(1);
+
+    when(ekycsvc.pdfCreationEkyc(cstmrNo))
+            .thenReturn(Base64.getEncoder().encodeToString("PDF".getBytes()));
+
+    try (MockedConstruction<File> mockedFile =
+                 mockConstruction(File.class, (mock, context) -> {
+                     when(mock.exists()).thenReturn(false);
+                 })) {
+
+        ntbRequest.createEkycVkyc(cstmr, cstmrNo, path);
+
+        verify(ekycsvc).pdfCreationEkyc(cstmrNo);
+        verify(ekycsvc, never()).pdfCreationvkyc(anyString());
+    }
+}
+
+@Test
+void createEkycVkyc_checkerAndMakerZero_shouldCreateVkycPdf() throws Exception {
+
+    String cstmrNo = "REF123";
+    String path = "/tmp/";
+
+    CustomerOnbrding cstmr = new CustomerOnbrding();
+    cstmr.setChckrId(0);
+    cstmr.setMkrId(0);
+
+    when(ekycsvc.pdfCreationEkyc(cstmrNo))
+            .thenReturn(Base64.getEncoder().encodeToString("EKYC".getBytes()));
+
+    when(ekycsvc.pdfCreationvkyc(cstmrNo))
+            .thenReturn(Base64.getEncoder().encodeToString("VKYC".getBytes()));
+
+    try (MockedConstruction<File> mockedFile =
+                 mockConstruction(File.class, (mock, context) -> {
+                     when(mock.exists()).thenReturn(false);
+                 })) {
+
+        ntbRequest.createEkycVkyc(cstmr, cstmrNo, path);
+
+        verify(ekycsvc).pdfCreationEkyc(cstmrNo);
+        verify(ekycsvc).pdfCreationvkyc(cstmrNo);
+    }
+}
+
+@Test
+void createEkycVkyc_fileWriteFailure_shouldThrowException() throws Exception {
+
+    String cstmrNo = "REF123";
+    String path = "/tmp/";
+
+    CustomerOnbrding cstmr = new CustomerOnbrding();
+    cstmr.setChckrId(1);
+    cstmr.setMkrId(1);
+
+    when(ekycsvc.pdfCreationEkyc(cstmrNo))
+            .thenReturn(Base64.getEncoder().encodeToString("EKYC".getBytes()));
+
+    try (MockedConstruction<FileOutputStream> mockedStream =
+                 mockConstruction(FileOutputStream.class,
+                         (mock, context) -> {
+                             throw new IOException("Disk error");
+                         })) {
+
+        assertThrows(
+                ServiceBusinessException.class,
+                () -> ntbRequest.createEkycVkyc(cstmr, cstmrNo, path)
+        );
+    }
+}
+
+
+
+
+
+
+
+
+
+@Test
 void docSave_checkerAndMakerZero_shouldCallDocRespSave() {
 
     String cif = "CIF123";
