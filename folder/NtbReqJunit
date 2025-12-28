@@ -1,4 +1,199 @@
 @Test
+void videoUplaodDcmnt_docSuccess_shouldCallSavedDocument() throws Exception {
+
+    String cif = "CIF123";
+    String cstmrNo = "REF123";
+    String fileName = "aadhaar.pdf";
+
+    File file = mock(File.class);
+    when(file.length()).thenReturn(2048L);
+
+    EDMSResponse docUploadRes = new EDMSResponse();
+    docUploadRes.setResponseMsg("DOCUMENTS UPLOADED SUCCESSFULLY");
+
+    EDMSResponse vidUploadRes = new EDMSResponse();
+    vidUploadRes.setResponseMsg("NEW DOCUMENT UPLOADED");
+
+    EdmsDoc edmsDoc = new EdmsDoc();
+
+    NtbRequest spy = spy(ntbRequest);
+
+    Method method = NtbRequest.class.getDeclaredMethod(
+            "videoUplaodDcmnt",
+            String.class,
+            String.class,
+            EDMSResponse.class,
+            EDMSResponse.class,
+            EdmsDoc.class,
+            File.class,
+            String.class
+    );
+    method.setAccessible(true);
+
+    method.invoke(
+            spy,
+            cif,
+            cstmrNo,
+            docUploadRes,
+            vidUploadRes,
+            edmsDoc,
+            file,
+            fileName
+    );
+
+    verify(spy).savedDocument(
+            anyString(),
+            eq(cif),
+            eq(cstmrNo),
+            eq(vidUploadRes),
+            eq(edmsDoc),
+            eq(file),
+            eq(fileName)
+    );
+}
+
+@Test
+void videoUplaodDcmnt_docFailure_nonVkyc_shouldSaveFailure() throws Exception {
+
+    String cif = "CIF123";
+    String cstmrNo = "REF123";
+    String fileName = "pan.pdf";
+
+    File file = mock(File.class);
+    when(file.length()).thenReturn(1024L);
+
+    EDMSResponse docUploadRes = new EDMSResponse();
+    docUploadRes.setResponseMsg("FAILED");
+
+    EDMSResponse vidUploadRes = new EDMSResponse();
+    vidUploadRes.setResponseMsg("FAILED");
+
+    EdmsDoc edmsDoc = new EdmsDoc();
+
+    Method method = NtbRequest.class.getDeclaredMethod(
+            "videoUplaodDcmnt",
+            String.class,
+            String.class,
+            EDMSResponse.class,
+            EDMSResponse.class,
+            EdmsDoc.class,
+            File.class,
+            String.class
+    );
+    method.setAccessible(true);
+
+    method.invoke(
+            ntbRequest,
+            cif,
+            cstmrNo,
+            docUploadRes,
+            vidUploadRes,
+            edmsDoc,
+            file,
+            fileName
+    );
+
+    verify(edmsRepo).save(any(EdmsDoc.class));
+}
+
+@Test
+void videoUplaodDcmnt_docFailure_vkycWebm_videoSuccess() throws Exception {
+
+    String cif = "CIF123";
+    String cstmrNo = "REF123";
+    String fileName = "U_VKYC.webm";
+
+    File file = mock(File.class);
+    when(file.length()).thenReturn(4096L);
+
+    EDMSResponse docUploadRes = new EDMSResponse();
+    docUploadRes.setResponseMsg("FAILED");
+
+    EDMSResponse vidUploadRes = new EDMSResponse();
+    vidUploadRes.setResponseMsg("NEW DOCUMENT UPLOADED");
+
+    EdmsDoc edmsDoc = new EdmsDoc();
+
+    Method method = NtbRequest.class.getDeclaredMethod(
+            "videoUplaodDcmnt",
+            String.class,
+            String.class,
+            EDMSResponse.class,
+            EDMSResponse.class,
+            EdmsDoc.class,
+            File.class,
+            String.class
+    );
+    method.setAccessible(true);
+
+    method.invoke(
+            ntbRequest,
+            cif,
+            cstmrNo,
+            docUploadRes,
+            vidUploadRes,
+            edmsDoc,
+            file,
+            fileName
+    );
+
+    verify(edmsRepo).save(any(EdmsDoc.class));
+}
+
+@Test
+void videoUplaodDcmnt_docFailure_vkycWebm_videoFailure() throws Exception {
+
+    String cif = "CIF123";
+    String cstmrNo = "REF123";
+    String fileName = "U_VKYC.webm";
+
+    File file = mock(File.class);
+    when(file.length()).thenReturn(2048L);
+
+    EDMSResponse docUploadRes = new EDMSResponse();
+    docUploadRes.setResponseMsg("FAILED");
+
+    EDMSResponse vidUploadRes = new EDMSResponse();
+    vidUploadRes.setResponseMsg("FAILED");
+
+    EdmsDoc edmsDoc = new EdmsDoc();
+
+    Method method = NtbRequest.class.getDeclaredMethod(
+            "videoUplaodDcmnt",
+            String.class,
+            String.class,
+            EDMSResponse.class,
+            EDMSResponse.class,
+            EdmsDoc.class,
+            File.class,
+            String.class
+    );
+    method.setAccessible(true);
+
+    method.invoke(
+            ntbRequest,
+            cif,
+            cstmrNo,
+            docUploadRes,
+            vidUploadRes,
+            edmsDoc,
+            file,
+            fileName
+    );
+
+    verify(edmsRepo).save(any(EdmsDoc.class));
+}
+
+
+
+
+
+
+
+
+
+
+@Test
 void savedDocument_nonVkycFile_success() throws Exception {
 
     String cif = "CIF123";
