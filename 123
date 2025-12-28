@@ -1,165 +1,138 @@
+package com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest;
 
-String thisMethod = EdmsUploadConstants.PERFORM_AUDIT;
-FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-Gson gson = new Gson();
-Encoder encoder = Base64.getEncoder();
-ServiceAuditVO svcVo = new ServiceAuditVO();
+import java.util.List;
+import java.util.Optional;
 
-/**
- * Convert bean to JSON and remove base64Str values
- */
-String strReq = gson.toJson(bean);
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-JsonObject root = JsonParser.parseString(strReq).getAsJsonObject();
+import com.sbi.yono.document.savingsaccount.edms.bean.ReqBean;
+import com.sbi.yono.document.savingsaccount.edms.bean.RequestBeanNRI;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsDocDetailsRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+import com.sbi.yono.document.savingsaccount.edms.nrinroupload.NriMainClassSvc;
 
-// Remove base64Str from nested objects
-for (String key : root.keySet()) {
-    JsonElement element = root.get(key);
+@ExtendWith(MockitoExtension.class)
+class NriMainClassSvcMapDocumentTest {
 
-    if (element.isJsonObject()) {
-        JsonObject obj = element.getAsJsonObject();
-        if (obj.has("base64Str")) {
-            FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
-                    "Base64 string found and removed for security.");
-            obj.addProperty("base64Str", "");
-        }
+    @Mock
+    private EdmsDocDetailsRepo edmsDocDetailsRepo;
+
+    @InjectMocks
+    private NriMainClassSvc service;
+
+    // ==================================================
+    // 1️⃣ OPTIONAL PRESENT – LIST HAS DATA
+    // ==================================================
+    @Test
+    void mapDocument_whenOptionalListPresent_shouldMapDocs() {
+
+        // Arrange
+        String[] docs = { "doc1.pdf" };
+
+        RequestBeanNRI bean = new RequestBeanNRI();
+        ReqBean videoBean = new ReqBean();
+
+        EdmsDocDetails doc1 = new EdmsDocDetails();
+        doc1.setDocCode("DOC01");
+        doc1.setDocCategory("KYC");
+
+        List<EdmsDocDetails> detailsList = List.of(doc1);
+
+        when(edmsDocDetailsRepo.findBycompositeKeysRefNo("REF123"))
+                .thenReturn(Optional.of(detailsList));
+
+        // Act
+        Object[] result = service.mapDocument(
+                docs,
+                "REF123",
+                bean,
+                videoBean,
+                true,
+                "123456",
+                987654321L
+        );
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.length);
+
+        RequestBeanNRI resultBean = (RequestBeanNRI) result[0];
+        assertEquals("123456", resultBean.getCif());
+        assertEquals(987654321L, resultBean.getCkycNo());
+
+        verify(edmsDocDetailsRepo)
+                .findBycompositeKeysRefNo("REF123");
     }
-}
 
-String updatedReqJson = gson.toJson(root);
-FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, updatedReqJson);
+    // ==================================================
+    // 2️⃣ OPTIONAL EMPTY
+    // ==================================================
+    @Test
+    void mapDocument_whenOptionalEmpty_shouldSkipGracefully() {
 
+        String[] docs = { "doc1.pdf" };
 
-/**
- * Handle docUploadRes response
- */
-String strResp = "";
-String responseCode = "";
-String responseMsg = "";
+        RequestBeanNRI bean = new RequestBeanNRI();
+        ReqBean videoBean = new ReqBean();
 
-if (docUploadRes != null) {
-    FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
-            EdmsUploadConstants.DOC_UPLOAD_RESPONSE_IS_NOT_NULL);
+        when(edmsDocDetailsRepo.findBycompositeKeysRefNo("REF456"))
+                .thenReturn(Optional.empty());
 
-    strResp = gson.toJson(docUploadRes);
-    responseCode = docUploadRes.getResponseCode();
-    responseMsg = docUploadRes.getResponseMsg();
-}
+        Object[] result = service.mapDocument(
+                docs,
+                "REF456",
+                bean,
+                videoBean,
+                false,
+                null,
+                null
+        );
 
+        assertNotNull(result);
+        assertEquals(2, result.length);
 
-/**
- * Capture session information
- */
-SessionVO sessionVO = new SessionVO();
+        verify(edmsDocDetailsRepo)
+                .findBycompositeKeysRefNo("REF456");
+    }
 
-ServletRequestAttributes reqAttr =
-        (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+    // ==================================================
+    // 3️⃣ MULTIPLE DOCUMENT DETAILS
+    // ==================================================
+    @Test
+    void mapDocument_whenMultipleEdmsDocDetails_shouldIterateAll() {
 
-if (reqAttr != null) {
-    HttpServletRequest req = reqAttr.getRequest();
-    sessionVO.setDataType(req.getHeader(Constants.DATATYPE));
-}
+        String[] docs = { "doc1.pdf", "doc2.pdf" };
 
+        List<EdmsDocDetails> detailsList = List.of(
+                new EdmsDocDetails(),
+                new EdmsDocDetails()
+        );
 
-// Generate fresh Transaction ID
-String transactionId = IDGenerator.generateTransactionId(22);
-svcVo.setTransId(transactionId);
-sessionVO.setTransactionId(transactionId);
+        when(edmsDocDetailsRepo.findBycompositeKeysRefNo("REF789"))
+                .thenReturn(Optional.of(detailsList));
 
+        RequestBeanNRI bean = new RequestBeanNRI();
+        ReqBean videoBean = new ReqBean();
 
-/**
- * Prepare ServiceAuditVO
- */
-svcVo.setSessnTknId(sessionVO.getSessionTokenID());
-svcVo.setTrnsSts("-1");
-svcVo.setErrCd(responseCode);
-svcVo.setErrMsg(responseMsg);
-svcVo.setUsrId(sessionVO.getUserId());
-svcVo.setSrvcRqst(encoder.encodeToString(updatedReqJson.getBytes())); // encoded request
-svcVo.setSrvcRspn(encoder.encodeToString(strResp.getBytes()));        // encoded response
-svcVo.setServiceId(Constants.EDMSUPLOADDOC);
-svcVo.setSystemName(EdmsUploadConstants.EDMS);
-svcVo.setApiUrl(docUploadURL);
-svcVo.setRqstIdSent(IDGenerator.generateTransactionId(22));
-svcVo.setRqstIdReceived(IDGenerator.generateTransactionId(22));
-svcVo.setCrtdBy(Constants.SYSTEM);
-svcVo.setCrtdOn(new Timestamp(System.currentTimeMillis()));
-svcVo.setStrtTime(null);
-svcVo.setEndTime(null);
+        service.mapDocument(
+                docs,
+                "REF789",
+                bean,
+                videoBean,
+                true,
+                "999999",
+                111L
+        );
 
-FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, svcVo.toString());
-
-/**
- * Reset SessionContext user info
- */
-sessionVO.setUserId(null);
-SessionContext.setSessionContext(sessionVO);
-
-
-/**
- * Perform Audit
- */
-performServiceAudit(svcVo);
-
-FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
-
-
-JsonObject root = JsonParser.parseString(strReq).getAsJsonObject();
-
-		for (String key : root.keySet()) {
-			JsonElement element = root.get(key);
-
-//			if (element.isJsonObject()) {
-//				JsonObject obj = element.getAsJsonObject();
-//				if (obj.has("base64Str")) {
-//					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
-//							"Base64 string found and removed for security.");
-//
-//					String jsonElement = obj.get("base64").getAsString();
-//
-//					if (jsonElement == null || jsonElement.isEmpty()) {
-//						obj.addProperty("base64Str", "Empty_Document_Base64_String");
-//					} else {
-//						obj.addProperty("base64Str", "...");
-//
-//					}
-//				}
-//			}
-			if(key.equals("base64")) {
-				if()
-			}
-		}  
-
-{
-    "base64": "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwH/////////EU2bdKpNu4tTq4QVSalmU6yBL027i1OrhBZUrmtTrIFYTbuLU6uEHFO7a1OsgcUVSalmpESJiEDl7CAAAAAAKtexgw9CQE2AhkNocm9tZVdBh",
-    "branchCode": "00437",
-    "channelID": "Y2EDSRK",
-    "cifNumber": "********2431",
-    "docTitle": "00000085002372431_VKYC.webm"
-}
-JsonObject root = JsonParser.parseString(strReq).getAsJsonObject();
-
-for (String key : root.keySet()) {
-
-    // Only process the field with name "base64"
-    if (key.equals("base64")) {
-
-        JsonElement element = root.get(key);
-
-        // Convert to String safely
-        String base64Value = element.isJsonNull() ? "" : element.getAsString();
-
-        if (base64Value == null || base64Value.trim().isEmpty()) {
-
-            // If base64 is empty → write placeholder
-            root.addProperty("base64", "Empty_Document_Base64_String");
-
-        } else {
-
-            // If base64 is present → replace with masked info
-            root.addProperty("base64", "...");
-
-        }
+        verify(edmsDocDetailsRepo)
+                .findBycompositeKeysRefNo("REF789");
     }
 }
