@@ -1,3 +1,134 @@
+@Test
+void savedDocument_nonVkycFile_success() throws Exception {
+
+    String cif = "CIF123";
+    String cstmrNo = "REF123";
+    String fileName = "aadhaar.pdf";
+
+    File file = mock(File.class);
+    when(file.length()).thenReturn(2048L);
+
+    EDMSResponse vidUploadRes = new EDMSResponse();
+    vidUploadRes.setResponseMsg("NEW DOCUMENT UPLOADED");
+
+    EdmsDoc edmsDoc = new EdmsDoc();
+
+    Method method = NtbRequest.class.getDeclaredMethod(
+            "savedDocument",
+            String.class,
+            String.class,
+            String.class,
+            EDMSResponse.class,
+            EdmsDoc.class,
+            File.class,
+            String.class
+    );
+    method.setAccessible(true);
+
+    method.invoke(
+            ntbRequest,
+            "TEST_METHOD",
+            cif,
+            cstmrNo,
+            vidUploadRes,
+            edmsDoc,
+            file,
+            fileName
+    );
+
+    verify(edmsRepo).save(any(EdmsDoc.class));
+}
+
+@Test
+void savedDocument_vkycWebm_videoSuccess() throws Exception {
+
+    String cif = "CIF123";
+    String cstmrNo = "REF123";
+    String fileName = "U_VKYC.webm";
+
+    File file = mock(File.class);
+    when(file.length()).thenReturn(4096L);
+
+    EDMSResponse vidUploadRes = new EDMSResponse();
+    vidUploadRes.setResponseMsg("NEW DOCUMENT UPLOADED");
+
+    EdmsDoc edmsDoc = new EdmsDoc();
+
+    Method method = NtbRequest.class.getDeclaredMethod(
+            "savedDocument",
+            String.class,
+            String.class,
+            String.class,
+            EDMSResponse.class,
+            EdmsDoc.class,
+            File.class,
+            String.class
+    );
+    method.setAccessible(true);
+
+    method.invoke(
+            ntbRequest,
+            "TEST_METHOD",
+            cif,
+            cstmrNo,
+            vidUploadRes,
+            edmsDoc,
+            file,
+            fileName
+    );
+
+    verify(edmsRepo).save(any(EdmsDoc.class));
+}
+
+@Test
+void savedDocument_vkycWebm_videoFailure() throws Exception {
+
+    String cif = "CIF123";
+    String cstmrNo = "REF123";
+    String fileName = "U_VKYC.webm";
+
+    File file = mock(File.class);
+    when(file.length()).thenReturn(1024L);
+
+    EDMSResponse vidUploadRes = new EDMSResponse();
+    vidUploadRes.setResponseMsg("FAILED");
+
+    EdmsDoc edmsDoc = new EdmsDoc();
+
+    Method method = NtbRequest.class.getDeclaredMethod(
+            "savedDocument",
+            String.class,
+            String.class,
+            String.class,
+            EDMSResponse.class,
+            EdmsDoc.class,
+            File.class,
+            String.class
+    );
+    method.setAccessible(true);
+
+    method.invoke(
+            ntbRequest,
+            "TEST_METHOD",
+            cif,
+            cstmrNo,
+            vidUploadRes,
+            edmsDoc,
+            file,
+            fileName
+    );
+
+    verify(edmsRepo).save(any(EdmsDoc.class));
+}
+
+
+
+
+
+
+
+
+
 package com.sbi.yono.document.savingsaccount.edms.ntbupload;
 
 import static org.mockito.ArgumentMatchers.*;
