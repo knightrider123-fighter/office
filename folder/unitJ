@@ -1,5 +1,125 @@
 package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.when;
+
+import java.time.LocalDateTime;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sbi.yono.document.savingsaccount.edms.bean.CommNstdReqBean;
+import com.sbi.yono.document.savingsaccount.edms.bean.CommNstdReqBean2;
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+
+@ExtendWith(MockitoExtension.class)
+class NriMainClassUtilityMapDocumentTest {
+
+    @Spy
+    private NriMainClassUtility utility;
+
+    @Mock
+    private EdmsDocDetails docDetails;
+
+    private static final String CIF = "1234567890";
+    private static final Long CKYC = 987654321012L;
+
+    // ================= mapDocumentToJson =================
+    @Test
+    void testMapDocumentToJson_allFieldsCovered() {
+
+        when(docDetails.getFileName()).thenReturn("ABC_COMBINE.pdf");
+        when(docDetails.isCersaiFlag()).thenReturn(true);
+        when(docDetails.isArchivalFlag()).thenReturn(false);
+        when(docDetails.getDocCategory()).thenReturn("CAT");
+        when(docDetails.getDocCode()).thenReturn("CODE");
+        when(docDetails.getDocIdentifier()).thenReturn("IDENTIFIER");
+        when(docDetails.getDocType()).thenReturn("DOC_TYPE");
+        when(docDetails.getIdNo()).thenReturn("ID123");
+        when(docDetails.getFilePath()).thenReturn("/dummy/path.pdf");
+        when(docDetails.getDocExpiryDate()).thenReturn(LocalDateTime.of(2025, 1, 1, 10, 0));
+        when(docDetails.getScannedDate()).thenReturn(LocalDateTime.of(2024, 1, 1, 10, 0));
+
+        doReturn("BASE64DATA")
+                .when(utility)
+                .generateBase64FromPath(any());
+
+        CommNstdReqBean result =
+                utility.mapDocumentToJson(null, docDetails, CIF, CKYC);
+
+        assertNotNull(result);
+        assertEquals(NriUploadConstant.Y, result.getCersaiFlag());
+        assertEquals(NriUploadConstant.N, result.getArchivalFlag());
+        assertEquals(CKYC, result.getCkycNumber());
+        assertEquals("CAT", result.getDocumentCategory());
+        assertEquals("CODE", result.getDocumentCode());
+        assertEquals("IDENTIFIER", result.getDocumentIdentifier());
+        assertEquals("DOC_TYPE", result.getDocumentType());
+        assertEquals("ID123", result.getIdNumber());
+        assertEquals("BASE64DATA", result.getBase64Str());
+        assertEquals("01-01-2025", result.getDocumentExpiryDate());
+        assertEquals("01-01-2024", result.getScannedDate());
+    }
+
+    // ================= mapDocumentToJson2 =================
+    @Test
+    void testMapDocumentToJson2_allFieldsCovered() {
+
+        when(docDetails.getFileName()).thenReturn("ABC_SIGN.jpeg");
+        when(docDetails.isCersaiFlag()).thenReturn(false);
+        when(docDetails.isArchivalFlag()).thenReturn(true);
+        when(docDetails.getComments()).thenReturn("Test comments");
+        when(docDetails.getDocCategory()).thenReturn("CAT2");
+        when(docDetails.getDocCode()).thenReturn("CODE2");
+        when(docDetails.getDocIdentifier()).thenReturn("IDENT2");
+        when(docDetails.getDocType()).thenReturn("DOC_TYPE2");
+        when(docDetails.getIdNo()).thenReturn("ID456");
+        when(docDetails.getFilePath()).thenReturn("/dummy/path.jpeg");
+        when(docDetails.getDocExpiryDate()).thenReturn(LocalDateTime.of(2026, 2, 2, 10, 0));
+        when(docDetails.getScannedDate()).thenReturn(LocalDateTime.of(2023, 2, 2, 10, 0));
+
+        doReturn("BASE64DATA2")
+                .when(utility)
+                .generateBase64FromPath(any());
+
+        CommNstdReqBean2 result =
+                utility.mapDocumentToJson2(null, docDetails, CIF, CKYC);
+
+        assertNotNull(result);
+        assertEquals(NriUploadConstant.N, result.getCersaiFlag());
+        assertEquals(NriUploadConstant.Y, result.getArchivalFlag());
+        assertEquals("Test comments", result.getComments());
+        assertEquals(CKYC, result.getCkycNumber());
+        assertEquals("CAT2", result.getDocumentCategory());
+        assertEquals("CODE2", result.getDocumentCode());
+        assertEquals("IDENT2", result.getDocumentIdentifier());
+        assertEquals("DOC_TYPE2", result.getDocumentType());
+        assertEquals("ID456", result.getIdNumber());
+        assertEquals("BASE64DATA2", result.getBase64Str());
+        assertEquals("02-02-2026", result.getDocumentExpiryDate());
+        assertEquals("02-02-2023", result.getScannedDate());
+    }
+}
+
+
+
+
+
+
+
+
+eeeeeeeee
+
+package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
