@@ -1,3 +1,190 @@
+
+@ExtendWith(MockitoExtension.class)
+class NriMainClassUtilityTest {
+
+    @Spy
+    private NriMainClassUtility utility;
+
+    @Mock
+    private EdmsDocDetails docDetails;
+
+    @Mock
+    private RequestBeanNRI requestBean;
+
+    @Mock
+    private ReqBean videoBean;
+
+    @Mock
+    private CommNstdReqBean2 commNstdReqBean2;
+
+    private static final String CIF = "1234567890";
+    private static final Long CKYC = 123456789012L;
+
+    // ================= VIDEO =================
+    @Test
+    void testProcessDocument_video() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn(RekycUploadConstants.VIDEO);
+
+        doReturn(videoBean)
+                .when(utility)
+                .videoMethod(any(), any(), any());
+
+        utility.processDocument(
+                docDetails,
+                requestBean,
+                videoBean,
+                "PHOTO_ID",
+                "SIGN_ID",
+                CIF,
+                CKYC
+        );
+
+        verify(utility, times(1))
+                .videoMethod(eq(docDetails), eq(videoBean), eq(requestBean));
+
+        verify(utility, never())
+                .createEdmsRequest(any(), any(), any(), any());
+    }
+
+    // ================= PHOTO MATCH =================
+    @Test
+    void testProcessDocument_photo_withMatchingDocId() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn(NriUploadConstant.PHOTO);
+        when(docDetails.getDocId()).thenReturn("PHOTO_ID");
+        when(docDetails.getFileName()).thenReturn("abc_photo.jpeg");
+
+        when(requestBean.getPhoto()).thenReturn(null);
+
+        doReturn(commNstdReqBean2)
+                .when(utility)
+                .mapDocumentToJson2(any(), any(), any(), any());
+
+        utility.processDocument(
+                docDetails,
+                requestBean,
+                videoBean,
+                "PHOTO_ID",
+                "SIGN_ID",
+                CIF,
+                CKYC
+        );
+
+        verify(utility, times(1))
+                .mapDocumentToJson2(any(), eq(docDetails), eq(CIF), eq(CKYC));
+
+        verify(requestBean, times(1))
+                .setPhoto(commNstdReqBean2);
+    }
+
+    // ================= PHOTO NO MATCH =================
+    @Test
+    void testProcessDocument_photo_docIdNotMatching() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn(NriUploadConstant.PHOTO);
+        when(docDetails.getDocId()).thenReturn("OTHER_ID");
+
+        utility.processDocument(
+                docDetails,
+                requestBean,
+                videoBean,
+                "PHOTO_ID",
+                "SIGN_ID",
+                CIF,
+                CKYC
+        );
+
+        verify(utility, never())
+                .mapDocumentToJson2(any(), any(), any(), any());
+
+        verify(requestBean, never())
+                .setPhoto(any());
+    }
+
+    // ================= SIGN MATCH =================
+    @Test
+    void testProcessDocument_sign_withMatchingDocId() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn(NriUploadConstant.SIGN);
+        when(docDetails.getDocId()).thenReturn("SIGN_ID");
+        when(docDetails.getFileName()).thenReturn("abc_sign.png");
+
+        when(requestBean.getSign()).thenReturn(null);
+
+        doReturn(commNstdReqBean2)
+                .when(utility)
+                .mapDocumentToJson2(any(), any(), any(), any());
+
+        utility.processDocument(
+                docDetails,
+                requestBean,
+                videoBean,
+                "PHOTO_ID",
+                "SIGN_ID",
+                CIF,
+                CKYC
+        );
+
+        verify(utility, times(1))
+                .mapDocumentToJson2(any(), eq(docDetails), eq(CIF), eq(CKYC));
+
+        verify(requestBean, times(1))
+                .setSign(commNstdReqBean2);
+    }
+
+    // ================= SIGN NO MATCH =================
+    @Test
+    void testProcessDocument_sign_docIdNotMatching() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn(NriUploadConstant.SIGN);
+        when(docDetails.getDocId()).thenReturn("OTHER_SIGN");
+
+        utility.processDocument(
+                docDetails,
+                requestBean,
+                videoBean,
+                "PHOTO_ID",
+                "SIGN_ID",
+                CIF,
+                CKYC
+        );
+
+        verify(utility, never())
+                .mapDocumentToJson2(any(), any(), any(), any());
+
+        verify(requestBean, never())
+                .setSign(any());
+    }
+
+    // ================= DEFAULT CASE =================
+    @Test
+    void testProcessDocument_defaultCase() {
+
+        when(docDetails.getDocEdmsMap()).thenReturn("UNKNOWN_DOC");
+
+        doNothing()
+                .when(utility)
+                .createEdmsRequest(any(), any(), any(), any());
+
+        utility.processDocument(
+                docDetails,
+                requestBean,
+                videoBean,
+                "PHOTO_ID",
+                "SIGN_ID",
+                CIF,
+                CKYC
+        );
+
+        verify(utility, times(1))
+                .createEdmsRequest(eq(docDetails), eq(requestBean), eq(CIF), eq(CKYC));
+    }
+}
+
+
+-----_----_----_-------------------------
+
 package com.sbi.yono.document.savingsaccount.edms.nrinroupload;
 
 import java.io.File;
