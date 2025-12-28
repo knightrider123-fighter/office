@@ -1,3 +1,150 @@
+
+
+
+
+package com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sbi.yono.document.savingsaccount.edms.bean.ReqBean;
+import com.sbi.yono.document.savingsaccount.edms.bean.RequestBeanNRI;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsDocDetailsRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+import com.sbi.yono.document.savingsaccount.edms.nrinroupload.NriMainClassSvc;
+
+@ExtendWith(MockitoExtension.class)
+class NriMainClassSvcMapDocumentTest {
+
+    @Mock
+    private EdmsDocDetailsRepo edmsDocDetailsRepo;
+
+    @InjectMocks
+    private NriMainClassSvc service;
+
+    // ==================================================
+    // 1️⃣ OPTIONAL PRESENT – LIST HAS DATA
+    // ==================================================
+    @Test
+    void mapDocument_whenOptionalListPresent_shouldMapDocs() {
+
+        // Arrange
+        String[] docs = { "doc1.pdf" };
+
+        RequestBeanNRI bean = new RequestBeanNRI();
+        ReqBean videoBean = new ReqBean();
+
+        EdmsDocDetails doc1 = new EdmsDocDetails();
+        doc1.setDocCode("DOC01");
+        doc1.setDocCategory("KYC");
+
+        List<EdmsDocDetails> detailsList = List.of(doc1);
+
+        when(edmsDocDetailsRepo.findBycompositeKeysRefNo("REF123"))
+                .thenReturn(Optional.of(detailsList));
+
+        // Act
+        Object[] result = service.mapDocument(
+                docs,
+                "REF123",
+                bean,
+                videoBean,
+                true,
+                "123456",
+                987654321L
+        );
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.length);
+
+        RequestBeanNRI resultBean = (RequestBeanNRI) result[0];
+        assertEquals("123456", resultBean.getCif());
+        assertEquals(987654321L, resultBean.getCkycNo());
+
+        verify(edmsDocDetailsRepo)
+                .findBycompositeKeysRefNo("REF123");
+    }
+
+    // ==================================================
+    // 2️⃣ OPTIONAL EMPTY
+    // ==================================================
+    @Test
+    void mapDocument_whenOptionalEmpty_shouldSkipGracefully() {
+
+        String[] docs = { "doc1.pdf" };
+
+        RequestBeanNRI bean = new RequestBeanNRI();
+        ReqBean videoBean = new ReqBean();
+
+        when(edmsDocDetailsRepo.findBycompositeKeysRefNo("REF456"))
+                .thenReturn(Optional.empty());
+
+        Object[] result = service.mapDocument(
+                docs,
+                "REF456",
+                bean,
+                videoBean,
+                false,
+                null,
+                null
+        );
+
+        assertNotNull(result);
+        assertEquals(2, result.length);
+
+        verify(edmsDocDetailsRepo)
+                .findBycompositeKeysRefNo("REF456");
+    }
+
+    // ==================================================
+    // 3️⃣ MULTIPLE DOCUMENT DETAILS
+    // ==================================================
+    @Test
+    void mapDocument_whenMultipleEdmsDocDetails_shouldIterateAll() {
+
+        String[] docs = { "doc1.pdf", "doc2.pdf" };
+
+        List<EdmsDocDetails> detailsList = List.of(
+                new EdmsDocDetails(),
+                new EdmsDocDetails()
+        );
+
+        when(edmsDocDetailsRepo.findBycompositeKeysRefNo("REF789"))
+                .thenReturn(Optional.of(detailsList));
+
+        RequestBeanNRI bean = new RequestBeanNRI();
+        ReqBean videoBean = new ReqBean();
+
+        service.mapDocument(
+                docs,
+                "REF789",
+                bean,
+                videoBean,
+                true,
+                "999999",
+                111L
+        );
+
+        verify(edmsDocDetailsRepo)
+                .findBycompositeKeysRefNo("REF789");
+    }
+}
+
+
+
+
+
 package com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest;
 
 import static org.junit.jupiter.api.Assertions.*;
