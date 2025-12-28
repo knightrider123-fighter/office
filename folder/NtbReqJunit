@@ -1,4 +1,169 @@
 @Test
+void docSave_checkerAndMakerZero_shouldCallDocRespSave() {
+
+    String cif = "CIF123";
+    String cstmrNo = "REF123";
+
+    File file = mock(File.class);
+    when(file.getName()).thenReturn("aadhaar.pdf");
+    when(file.length()).thenReturn(1024L);
+
+    File[] files = new File[]{file};
+
+    EDMSResponse docUploadRes = new EDMSResponse();
+    docUploadRes.setResponseMsg("DOCUMENTS UPLOADED SUCCESSFULLY");
+    docUploadRes.setResponseCode("00");
+
+    EDMSResponse vidUploadRes = new EDMSResponse();
+    vidUploadRes.setResponseMsg("NEW DOCUMENT UPLOADED");
+
+    CustomerOnbrding cstmrOnbrdng = new CustomerOnbrding();
+    cstmrOnbrdng.setChckrId(0);
+    cstmrOnbrdng.setMkrId(0);
+
+    CustomerOnboarding onboarding = new CustomerOnboarding();
+    onboarding.setCheckerId(0);
+    onboarding.setMakerId(0);
+
+    when(customerOnboardingRepository.findById(cstmrNo))
+            .thenReturn(Optional.of(onboarding));
+
+    NtbRequest spy = spy(ntbRequest);
+
+    spy.docSave(
+            cif,
+            cstmrNo,
+            docUploadRes,
+            vidUploadRes,
+            files,
+            new EdmsDoc(),
+            cstmrOnbrdng
+    );
+
+    verify(spy).docRespSave(
+            eq(cstmrNo),
+            eq(docUploadRes),
+            eq(vidUploadRes),
+            eq(onboarding)
+    );
+}
+
+@Test
+void docSave_docUploadFailure_shouldSaveFailureResponse() {
+
+    String cif = "CIF123";
+    String cstmrNo = "REF123";
+
+    EDMSResponse docUploadRes = new EDMSResponse();
+    docUploadRes.setResponseMsg("FAILED");
+    docUploadRes.setResponseCode("102");
+
+    CustomerOnbrding cstmrOnbrdng = new CustomerOnbrding();
+    cstmrOnbrdng.setChckrId(1);
+    cstmrOnbrdng.setMkrId(1);
+
+    CustomerOnboarding onboarding = new CustomerOnboarding();
+
+    when(customerOnboardingRepository.findById(cstmrNo))
+            .thenReturn(Optional.of(onboarding));
+
+    ntbRequest.docSave(
+            cif,
+            cstmrNo,
+            docUploadRes,
+            null,
+            null,
+            new EdmsDoc(),
+            cstmrOnbrdng
+    );
+
+    verify(saveResp).saveNTBEdmsResp(eq("102"), eq(onboarding));
+}
+
+@Test
+void docRespSave_docAndVideoSuccess_shouldUpdateCustomerStatus() {
+
+    String cstmrNo = "REF123";
+
+    EDMSResponse docUploadRes = new EDMSResponse();
+    docUploadRes.setResponseMsg("DOCUMENTS UPLOADED SUCCESSFULLY");
+    docUploadRes.setResponseCode("00");
+
+    EDMSResponse vidUploadRes = new EDMSResponse();
+    vidUploadRes.setResponseMsg("NEW DOCUMENT UPLOADED");
+
+    CustomerOnboarding onboarding = new CustomerOnboarding();
+
+    when(customerOnboardingRepository.findById(cstmrNo))
+            .thenReturn(Optional.of(onboarding));
+
+    ntbRequest.docRespSave(
+            cstmrNo,
+            docUploadRes,
+            vidUploadRes,
+            onboarding
+    );
+
+    verify(customerOnboardingRepository).save(any(CustomerOnboarding.class));
+}
+
+@Test
+void docRespSave_docAndVideoPartialSuccess_shouldUpdateStatus() {
+
+    String cstmrNo = "REF123";
+
+    EDMSResponse docUploadRes = new EDMSResponse();
+    docUploadRes.setResponseCode("03");
+
+    EDMSResponse vidUploadRes = new EDMSResponse();
+    vidUploadRes.setResponseCode("800");
+
+    CustomerOnboarding onboarding = new CustomerOnboarding();
+
+    when(customerOnboardingRepository.findById(cstmrNo))
+            .thenReturn(Optional.of(onboarding));
+
+    ntbRequest.docRespSave(
+            cstmrNo,
+            docUploadRes,
+            vidUploadRes,
+            onboarding
+    );
+
+    verify(customerOnboardingRepository).save(any(CustomerOnboarding.class));
+}
+
+@Test
+void docRespSave_docFailure_shouldSaveFailureResponse() {
+
+    String cstmrNo = "REF123";
+
+    EDMSResponse docUploadRes = new EDMSResponse();
+    docUploadRes.setResponseCode("102");
+
+    CustomerOnboarding onboarding = new CustomerOnboarding();
+
+    ntbRequest.docRespSave(
+            cstmrNo,
+            docUploadRes,
+            null,
+            onboarding
+    );
+
+    verify(saveResp).saveNTBEdmsResp(eq("102"), eq(onboarding));
+}
+
+
+
+
+
+
+
+
+
+
+
+@Test
 void videoUplaodDcmnt_docSuccess_shouldCallSavedDocument() throws Exception {
 
     String cif = "CIF123";
