@@ -1,4 +1,32 @@
-package com.sbi.yono.document.savingsaccount.edms.nrinrouploadTest;
+public Object[] mapDocument(String[] docs, String currentLead, RequestBeanNRI bean, ReqBean videoBean,
+			boolean leadIdPresent, String cif, Long ckycNumber) {
+		String thisMethod = NriUploadConstant.MAP_DOCUMENT;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+
+		Optional<List<EdmsDocDetails>> edmsDocDetailsInfo = edmsDocDetailsRepo.findBycompositeKeysRefNo(currentLead);
+		if (edmsDocDetailsInfo.isPresent()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					NriUploadConstant.EDMS_DOC_DETAILS_REPO_PRESENT);
+			List<EdmsDocDetails> documents = edmsDocDetailsInfo.get();
+			String photoDocType = "DC_004";
+			String signDocType = "DC_005";
+
+			for (EdmsDocDetails docDetails : documents) {
+
+				if (Arrays.asList(docs).contains(docDetails.getDocEdmsMap())) {
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+							NriUploadConstant.DOCS_CONTAINS_DOC_DETAILS_GET_DOC_EDMS_MAP);
+					mainClassUtility.processDocument(docDetails, bean, videoBean, photoDocType, signDocType, cif,
+							ckycNumber);
+				}
+			}
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return new Object[] { bean, videoBean };
+	}
+
+
+
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
