@@ -1,3 +1,32 @@
+public class EtbTriggerDto {
+
+    private String refNo;
+    private String channelId;
+
+    private List<String> docNames;      // ARRAY_AGG(doc_edms_map)
+    private List<String> filePaths;     // ARRAY_AGG(file_path)
+
+    private String docReqJson;          // m.doc_req (JSON)
+
+    private boolean uploadStatus;
+    private String docUploadPath;
+
+    private String cif;
+    private String accntNo;
+    private String ppfAccntNo;
+    private String upiId;
+    private String jrny;
+
+    // getters & setters
+}
+
+
+
+
+
+
+
+
 public class EtbTriggerRowMapper implements RowMapper<EtbTriggerDto> {
 
     @Override
