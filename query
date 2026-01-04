@@ -1,3 +1,55 @@
+
+@Component
+public class EtbTriggerReader implements ItemReader<List<EtbTriggerDto>> {
+
+    private final JdbcTemplate jdbcTemplate;
+    private final int pageSize = 100;
+    private int offset = 0;
+    private boolean finished = false;
+
+    public EtbTriggerReader(DataSource dataSource) {
+        this.jdbcTemplate = new JdbcTemplate(dataSource);
+    }
+
+    @Override
+    public List<EtbTriggerDto> read() {
+
+        if (finished) {
+            return null;
+        }
+
+        String sql =
+            "SELECT u.ref_no, " +
+            "ARRAY_AGG(d.file_path ORDER BY d.doc_edms_map) AS file_paths, " +
+            "ARRAY_AGG(d.doc_edms_map ORDER BY d.doc_edms_map) AS doc_names, " +
+            "m.doc_req, u.channel_id, u.upload_status, u.doc_uplaod_path, " +
+            "a.cif, a.accnt_no, a.ppf_accnt_no, a.upi_id, a.jrny " +
+            "FROM yono_dcmnt.edms_upload_doc u " +
+            "JOIN yono_dcmnt.edms_doc_dtls d ON u.ref_no = d.ref_no " +
+            "LEFT JOIN yono_accnt.accnt_onbrdng_status a ON u.ref_no = a.ref_no " +
+            "JOIN yono_dcmnt.dcmnt_req_mstr m ON m.channel_id = u.channel_id " +
+            "WHERE u.upload_status = false " +
+            "GROUP BY u.ref_no, u.channel_id, u.upload_status, u.doc_uplaod_path, " +
+            "a.cif, a.accnt_no, a.ppf_accnt_no, a.upi_id, a.jrny, m.doc_req " +
+            "ORDER BY u.ref_no LIMIT ? OFFSET ?";
+
+        List<EtbTriggerDto> list =
+                jdbcTemplate.query(sql, new EtbTriggerRowMapper(), pageSize, offset);
+
+        if (list.isEmpty()) {
+            finished = true;
+            return null;
+        }
+
+        offset += pageSize;
+        return list;
+    }
+}
+
+
+
+
+
 SELECT  
     u.ref_no, 
 
