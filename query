@@ -1,3 +1,74 @@
+
+SELECT ref_no, doc_id, doc_edms_map, file_name, id_no, ckyc_no, cersai_flag, archival_flag, doc_type, scanned_dt, doc_code, doc_category, doc_identifier, doc_expiry_date, cmmnts, file_path, crtd_by, updtd_by, crtd_dt, updtd_dt
+	FROM yono_dcmnt.edms_doc_dtls;
+	"SBIY2NRI2535710128454FpC4av3"	"DC_011"	"KYC_2"	"SBIY2NRI2535710128454FpC4av3_KYC_2.jpeg"		0	false	true	"5"	"2025-12-23 10:42:26.487715+05:30"	"5"	"5"	"5"			"/opt/Documents/SBIY2NRI2535710128454FpC4av3/SBIY2NRI2535710128454FpC4av3_KYC_2.jpeg"	"SYSTEM"	"SYSTEM"	"2025-12-23 10:42:26.487737"	"2025-12-23 10:42:26.487738"
+"SBIY2NRI2535710128454FpC4av3"	"DC_012"	"KYC_3"	"SBIY2NRI2535710128454FpC4av3_KYC_3.jpeg"		0	false	true	"5"	"2025-12-23 10:42:34.399779+05:30"	"5"	"5"	"5"			"/opt/Documents/SBIY2NRI2535710128454FpC4av3/SBIY2NRI2535710128454FpC4av3_KYC_3.jpeg"	"SYSTEM"	"SYSTEM"	"2025-12-23 10:42:34.39981"	"2025-12-23 10:42:34.399811"
+"SBIY2NRI2535710128454FpC4av3"	"DC_031"	"Curr_Add_Prf"	"SBIY2NRI2535710128454FpC4av3_Curr_Add_Prf.jpeg"		0	false	true	"0"	"2025-12-23 10:42:54.867367+05:30"	"0"	"0"	"0"			"/opt/Documents/SBIY2NRI2535710128454FpC4av3/SBIY2NRI2535710128454FpC4av3_Curr_Add_Prf.jpeg"	"SYSTEM"	"SYSTEM"	"2025-12-23 10:42:54.867399"	"2025-12-23 10:42:54.8674"
+"SBIY2NRI2535710128454FpC4av3"	"DC_004"	"Photo"	"SBIY2NRI2535710128454FpC4av3_Captured_Photo.jpeg"		0	false	true	"2"	"2025-12-23 10:43:06.738327+05:30"	"2"	"2"	"2"			"/opt/Documents/SBIY2NRI2535710128454FpC4av3/SBIY2NRI2535710128454FpC4av3_Captured_Photo.jpeg"	"SYSTEM"	"SYSTEM"	"2025-12-23 10:43:06.738359"	"2025-12-23 10:43:06.73836"
+	
+SELECT ref_id, channel_id, doc_req, crtd_by, updtd_by, crtd_dt, updtd_dt
+	FROM yono_dcmnt.dcmnt_req_mstr;
+	"RF_010"	"Y2EBNSA"	"{""doc"": [""4"", ""AOF"", ""COMBINE""]}"	"SYSTEM"	"SYSTEM"	"2025-08-29 17:44:26.851357"	"2025-08-29 17:44:26.851357"
+	
+SELECT ref_no, channel_id, no_of_poa, no_of_poi, no_of_kyc, no_of_others, upload_status, response_status, doc_uplaod_path, crtd_by, updtd_by, crtd_dt, updtd_dt
+	FROM yono_dcmnt.edms_upload_doc;
+	"SBIY2NRI2535710128454FpC4av3"	"Y2EBNSA"	0	0	1	0	false	0	"/opt\Documents\SBIY2ECA2426812090579VOjXrRF\"	"SYSTEM"	"SYSTEM"	"2025-12-30 16:42:08.407149+05:30"	"2025-12-30 16:52:56.349306"
+	
+
+
+SELECT 
+    u.ref_no,
+
+    ARRAY_AGG(d.file_path ORDER BY d.doc_edms_map)    AS file_paths,
+    ARRAY_AGG(d.doc_edms_map ORDER BY d.doc_edms_map) AS doc_names,
+
+    m.doc_req,
+
+    u.channel_id,
+    u.upload_status,
+    u.doc_uplaod_path,
+
+    a.cif,
+    a.accnt_no,
+    a.ppf_accnt_no,
+    a.upi_id,
+    a.jrny
+
+FROM yono_dcmnt.edms_upload_doc u
+
+INNER JOIN yono_dcmnt.edms_doc_dtls d
+        ON u.ref_no = d.ref_no
+
+LEFT JOIN yono_accnt.accnt_onbrdng_status a
+       ON u.ref_no = a.ref_no
+
+INNER JOIN yono_dcmnt.dcmnt_req_mstr m
+        ON m.channel_id = u.channel_id
+
+WHERE u.upload_status = false
+-- AND u.channel_id IN (...)   -- configurable
+
+GROUP BY
+    u.ref_no,
+    u.channel_id,
+    u.upload_status,
+    u.doc_uplaod_path,
+    a.cif,
+    a.accnt_no,
+    a.ppf_accnt_no,
+    a.upi_id,
+    a.jrny
+	m.doc_req,
+
+ORDER BY u.ref_no;
+
+
+=======================================================
+
+
+
+
+
 SELECT 
     u.ref_no,
 
