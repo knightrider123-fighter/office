@@ -1,3 +1,54 @@
+SELECT 
+    u.ref_no,
+
+    ARRAY_AGG(d.file_path ORDER BY d.doc_edms_map)    AS file_paths,
+    ARRAY_AGG(d.doc_edms_map ORDER BY d.doc_edms_map) AS doc_names,
+
+    m.doc_req,
+
+    u.channel_id,
+    u.upload_status,
+    u.doc_uplaod_path,
+
+    a.cif,
+    a.accnt_no,
+    a.ppf_accnt_no,
+    a.upi_id,
+    a.jrny
+
+FROM yono_dcmnt.edms_upload_doc u
+
+INNER JOIN yono_dcmnt.edms_doc_dtls d
+        ON u.ref_no = d.ref_no
+
+LEFT JOIN yono_accnt.accnt_onbrdng_status a
+       ON u.ref_no = a.ref_no
+
+INNER JOIN yono_dcmnt.dcmnt_req_mstr m
+        ON m.channel_id = u.channel_id
+
+WHERE u.upload_status = false
+-- AND u.channel_id IN (...)   -- configurable
+
+GROUP BY
+    u.ref_no,
+    u.channel_id,
+    u.upload_status,
+    u.doc_uplaod_path,
+    a.cif,
+    a.accnt_no,
+    a.ppf_accnt_no,
+    a.upi_id,
+    a.jrny
+
+ORDER BY u.ref_no;
+
+
+
+
+
+
+
 SELECT ref_no, cstmr_type, strt_dt, last_updtd_dt, status, mbl_no, frst_nm, mddle_nm, last_nm, ckyc_no, cif, prdct_type, prdct_sub_type, applcnt_dtls, vkyc_smmry, aadhar_dtls, pan_dtls, frm60_dtls, amlock_dtls, mkr_id, mkr_crtn_dt, mkr_updtn_dt, chckr_id, chckr_crtn_dt, chckr_updtn_dt, vkyc_dtls, digilocker_dtls, flg, rjctd_rsn, dvc_info, updtd_dt, crtd_by, updtd_by, alrt_dtls, fatca_dtls, intl_state, crtn_dt, brnch_cd, response_status
 	FROM yono_cstmr.cstmr_onbrdng;
 	
