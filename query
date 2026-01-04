@@ -1,3 +1,54 @@
+SELECT  
+    u.ref_no, 
+
+    ARRAY_AGG(d.file_path ORDER BY d.doc_edms_map)    AS file_paths, 
+    ARRAY_AGG(d.doc_edms_map ORDER BY d.doc_edms_map) AS doc_names, 
+
+    m.doc_req, 
+
+    u.channel_id, 
+    u.upload_status, 
+    u.doc_uplaod_path, 
+
+    a.cif, 
+    a.accnt_no, 
+    a.ppf_accnt_no, 
+    a.upi_id, 
+    a.jrny 
+
+FROM yono_dcmnt.edms_upload_doc u 
+
+INNER JOIN yono_dcmnt.edms_doc_dtls d 
+        ON u.ref_no = d.ref_no 
+
+LEFT JOIN yono_accnt.accnt_onbrdng_status a 
+       ON u.ref_no = a.ref_no 
+
+INNER JOIN yono_dcmnt.dcmnt_req_mstr m 
+        ON m.channel_id = u.channel_id 
+
+WHERE u.upload_status = false 
+
+GROUP BY 
+    u.ref_no, 
+    u.channel_id, 
+    u.upload_status, 
+    u.doc_uplaod_path, 
+    a.cif, 
+    a.accnt_no, 
+    a.ppf_accnt_no, 
+    a.upi_id, 
+    a.jrny,
+    m.doc_req          -- ✅ REQUIRED + comma fixed
+
+ORDER BY u.ref_no;
+
+
+
+
+
+
+
 
 SELECT ref_no, doc_id, doc_edms_map, file_name, id_no, ckyc_no, cersai_flag, archival_flag, doc_type, scanned_dt, doc_code, doc_category, doc_identifier, doc_expiry_date, cmmnts, file_path, crtd_by, updtd_by, crtd_dt, updtd_dt
 	FROM yono_dcmnt.edms_doc_dtls;
