@@ -1,0 +1,220 @@
+package com.sbi.yono.document.savingsaccount.edms.utility;
+
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.DcmntReqMstrRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsDocDetailsRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsUploadDocRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.NriAccntOnbrdingRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.NtbErrorRepository;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsUploadDoc;
+import com.sbi.yono.document.savingsaccount.edms.entity.NTBTriggerErrorEntity;
+import com.sbi.yono.document.savingsaccount.edms.entity.NriAccntOnbrdng;
+import com.tcs.techbone.logger.FLogger;
+
+@Service
+public class DocValidationUtility {
+
+	private EdmsDocDetailsRepo edmsDocDtlsRepo;
+	private DcmntReqMstrRepo dcmntReqMstrRepo;
+	private EdmsUploadDocRepo edmsUploadDocRepo;
+	private NtbErrorRepository ntbErrorRepository;
+	private NriAccntOnbrdingRepo nriAccntOnbrdingRepo;
+
+	public DocValidationUtility(EdmsDocDetailsRepo edmsDocDtlsRepo, DcmntReqMstrRepo dcmntReqMstrRepo,
+			EdmsUploadDocRepo edmsUploadDocRepo, NriAccntOnbrdingRepo nriAccntOnbrdingRepo,NtbErrorRepository ntbErrorRepository) {
+		this.nriAccntOnbrdingRepo = nriAccntOnbrdingRepo;
+		this.edmsDocDtlsRepo = edmsDocDtlsRepo;
+		this.dcmntReqMstrRepo = dcmntReqMstrRepo;
+		this.edmsUploadDocRepo = edmsUploadDocRepo;
+		this.ntbErrorRepository=ntbErrorRepository;
+	}
+ 
+	public boolean validateDocWithRefno(String refNo) {
+		String thisMethod = "validateDocWithRefNo";
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_STARTED);
+
+		try {
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+					"Into try block of validateDocWithRefNo");
+			Optional<List<EdmsDocDetails>> allDtlsForRefnoOptional = edmsDocDtlsRepo.findBycompositeKeysRefNo(refNo);
+
+			Optional<NriAccntOnbrdng> nriAccntOnbrdngOptional = nriAccntOnbrdingRepo.findByRefNo(refNo);
+
+			Optional<EdmsUploadDoc> edmsUploadDocOptional = edmsUploadDocRepo.findByRefNoAndUploadStatus(refNo, false);
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "Extracted all the optional..");
+
+			if (allDtlsForRefnoOptional.isEmpty() || edmsUploadDocOptional.isEmpty()
+					|| nriAccntOnbrdngOptional.isEmpty()) {
+				FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+						"One of the Optional is empty return false");
+				return false;
+			}
+			String cif = nriAccntOnbrdngOptional.get().getCif();
+
+			EdmsUploadDoc edmsUploadDoc = edmsUploadDocOptional.get();
+			List<EdmsDocDetails> allDtlsForRefno = allDtlsForRefnoOptional.get();
+
+			String channelId = edmsUploadDoc.getChannelId();
+			String getRequiredDoc = dcmntReqMstrRepo.getAccountCnstValue(channelId);
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+					"Getting CIF all the necessary Entity for validation");
+
+			if (getRequiredDoc == null || getRequiredDoc.isEmpty()) {
+				FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+						"Required DOC is empty for channel ID " + channelId);
+				return false;
+			}
+
+			ObjectMapper objectMapper = new ObjectMapper();
+			List<String> docList;
+
+			Map<String, Object> docMap = objectMapper.readValue(getRequiredDoc, Map.class);
+			docList = (List<String>) docMap.get("doc");
+
+			if (docList == null || docList.isEmpty()) {
+				FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+						"Empty JSON from req master table for channelId " + channelId);
+				return false;
+			}
+
+			Collections.sort(docList);
+
+			if (!docList.isEmpty()) {
+				FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+						"Removing 1st index for Extracted list  " + channelId);
+				docList.remove(0);
+			}
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_END);
+			return validateWithDtlsChannelList(edmsUploadDoc, allDtlsForRefno, docList, channelId, cif);
+
+		} catch (JsonProcessingException e) {
+
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), "validateDocWithRefno",
+					ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_END);
+
+			return false;
+
+		}
+	}
+
+	public boolean validateWithDtlsChannelList(EdmsUploadDoc edmsUploadDoc, List<EdmsDocDetails> allDtlsForRefno,
+			List<String> docList, String channelId, String cif) {
+		String thisMethod = "validateWithDtlsChannelList";
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_STARTED);
+
+		List<String> missingInNfs = new ArrayList<>();
+		List<String> missingInDtls = new ArrayList<>();
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "Matching DTLS and NFS");
+		for (EdmsDocDetails doc : allDtlsForRefno) {
+ 
+			String filePath = doc.getFilePath();
+			String docName = doc.getDocEdmsMap();
+
+			if (filePath == null || filePath.trim().isEmpty()
+					|| !Files.exists(Paths.get(filePath.replace("\\", "/")))) {
+				FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "Missing doc " + docName);
+				missingInNfs.add(docName);
+			}
+		}
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "End of Matching DTLS and NFS");
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "Starting to collecting uploadedDocs");
+
+		Set<String> uploadedDocs = new HashSet<>();
+		for (EdmsDocDetails doc : allDtlsForRefno) {
+
+			if (doc.getDocEdmsMap() != null) {
+				FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+						"Doc add in uploadedDocs " + doc.getDocEdmsMap().toUpperCase());
+				uploadedDocs.add(doc.getDocEdmsMap().toUpperCase());
+			}
+		}
+
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "End of collecting uploadedDocs");
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+				"Start of Matching DTLS and Master table");
+
+		for (String requiredDoc : docList) {
+			if (!uploadedDocs.contains(requiredDoc.toUpperCase())) {
+				FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+						"Missing doc in upload doc " + requiredDoc);
+				missingInDtls.add(requiredDoc);
+			}
+		}
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+				"End of Matching DTLS and Master table");
+
+		if (!missingInNfs.isEmpty() || !missingInDtls.isEmpty()) {
+			String refNo = edmsUploadDoc.getRefNo();
+			String errorDescription = "Documents missing NFS" + missingInNfs + " " + "Documents missing DTLS"
+					+ missingInDtls;
+			logAndSaveError(refNo, channelId, cif, errorDescription, 1002);
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "Error Description "+errorDescription);
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_END);
+
+			return false;
+		}
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "Valided , all documents are present...");
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_END);
+		
+		return true;
+	}
+
+	private String logAndSaveError(String refNo, String channelId, String cif, String errorDescription, int erroCode) {
+		String thisMethod = "logAndSaveError";
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_STARTED);
+		Short errorCodeShort = (short) erroCode;
+		Optional<NTBTriggerErrorEntity> existingErrorOpt = ntbErrorRepository.findByRefNo(refNo);
+
+		NTBTriggerErrorEntity errorEntity;
+
+		if (existingErrorOpt.isPresent()) {
+
+			errorEntity = existingErrorOpt.get();
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+					"Existing error found. Updating entity.");
+			errorEntity.setUpdtDt(LocalDateTime.now());
+			errorEntity.setUpdtdBy("SYSTEM_RETRY");
+			errorEntity.setErrorCode(errorCodeShort);
+
+		} else {
+
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "New error. Creating entity.");
+			errorEntity = new NTBTriggerErrorEntity();
+			errorEntity.setRefNo(refNo);
+			errorEntity.setChannelId(channelId);
+			errorEntity.setCif(cif);
+			errorEntity.setCrtdDt(LocalDateTime.now());
+			errorEntity.setUpdtDt(LocalDateTime.now());
+			errorEntity.setCrtdBy("SYSTEM");
+			errorEntity.setUpdtdBy("SYSTEM");
+			errorEntity.setErrorCode(errorCodeShort);
+
+		}
+		
+			errorEntity.setJobId("NRI");
+	
+		errorEntity.setErrorDescription(errorDescription);
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), "Saving/Updating error entity");
+		ntbErrorRepository.save(errorEntity);
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_END);
+		return "Failed";
+	}
+}
