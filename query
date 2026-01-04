@@ -1,3 +1,8 @@
+public boolean validateWithDtlsChannelList(EdmsUploadDoc edmsUploadDoc, List<EdmsDocDetails> allDtlsForRefno,
+			List<String> docList, String channelId, String cif) 
+
+
+
 public class EtbTriggerDto {
 
     private String refNo;
