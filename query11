@@ -15,6 +15,73 @@ SELECT ref_id, channel_id, doc_req, crtd_by, updtd_by, crtd_dt, updtd_dt
 
 "RF_022"	"Y2EDNRI"	"{""doc"": [""4"", ""AOF"", ""Combine"", ""TNC"", ""CIDF"", ""Photo"", ""SIGN"", ""Sign""]}"	"SYSTEM"	"SYSTEM"	"2025-12-25 12:33:17.970231"	"2025-12-25 12:33:17.970231"
 
+package com.sbi.yono.document.batch.reader;
+
+import java.util.List;
+
+import javax.sql.DataSource;
+
+import org.springframework.batch.item.ItemReader;
+import org.springframework.batch.item.ParseException;
+import org.springframework.batch.item.UnexpectedInputException;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+
+import com.sbi.yono.document.batch.dto.EtbTriggerDto;
+import com.sbi.yono.document.batch.dto.NtbReq;
+import com.sbi.yono.document.batch.rowmapper.EtbTriggerRowMapper;
+import com.sbi.yono.document.batch.rowmapper.NtbReqRowMapper;
+import com.sbi.yono.document.savingsaccount.edms.upload.EdmsUploadConstants;
+import com.tcs.techbone.channel.global.reader.GlobalConfigPropertiesReader;
+import com.tcs.techbone.exception.ServiceBusinessException;
+
+@Component
+public class ListReadingEtbTrigger implements ItemReader<List<EtbTriggerDto>> {
+
+	private final JdbcTemplate jdbcTemplate;
+	int pagesize = Integer.parseInt((String) GlobalConfigPropertiesReader.getInstance()
+			.getPropertyById(EdmsUploadConstants.EDMS_SEGEMENT_SIZE));
+	private boolean finished = false;
+
+	public ListReadingEtbTrigger(DataSource dataSource) {
+		this.jdbcTemplate = new JdbcTemplate();
+		this.jdbcTemplate.setDataSource(dataSource);
+	}
+
+	@Override
+	public List<EtbTriggerDto> read() throws UnexpectedInputException, ParseException, ServiceBusinessException {
+		if (finished) {
+			return null;
+		}
+		String sql = new StringBuilder().append("select t1.ref_no, t1.cif,t1.channel_id,t1.updtd_dt ,t1.job_id, ")
+				.append("t2.acnt_nmbr,t2.updtd_dt as crtn_dt,t2.isd_cd, ")
+				.append("t3.frst_nm,t3.last_nm,t3.mddle_nm,t3.brnch_cd,t3.ckyc_no,t3.mbl_no,t3.pan_dtls->>'pan' As pan ")
+				.append("from yono_dcmnt.edms_retry AS t1 ")
+				.append("INNER JOIN yono_accnt.accnt_onbrdng AS t2 ON t1.ref_no = t2.ref_no ")
+				.append("INNER JOIN yono_cstmr.cstmr_onbrdng AS t3 ON t2.ref_no = t3.ref_no ")
+				.append("where channel_id in ('Y2NDSSA','Y2NBNSA','Y2NBSSA') ")
+				.append("order by t1.updtd_dt asc limit ").append(pagesize).toString();
+
+		List<EtbTriggerDto> list;
+		try {
+			list = jdbcTemplate.query(sql, new EtbTriggerRowMapper(EtbTriggerDto.class));
+		} catch (DataAccessException e) {
+			throw new UnexpectedInputException("Failed to read items from the database.", e);
+		} catch (Exception e) {
+			throw new ServiceBusinessException(e);
+		}
+
+		if (list.isEmpty()) {
+			finished = true;
+			return null;
+		}
+		return list;
+
+	}
+}
+
+
 
 this is my dtls and req table and one more i have all this doc in my NFS/ Local storage i want to create an utility for the same to for validation give true or false  
 
