@@ -1,3 +1,45 @@
+public class EtbTriggerRowMapper implements RowMapper<EtbTriggerDto> {
+
+    @Override
+    public EtbTriggerDto mapRow(ResultSet rs, int rowNum) throws SQLException {
+
+        EtbTriggerDto dto = new EtbTriggerDto();
+
+        dto.setRefNo(rs.getString("ref_no"));
+        dto.setChannelId(rs.getString("channel_id"));
+
+        // PostgreSQL ARRAY → Java List
+        Array docNamesArr = rs.getArray("doc_names");
+        if (docNamesArr != null) {
+            dto.setDocNames(Arrays.asList((String[]) docNamesArr.getArray()));
+        }
+
+        Array filePathsArr = rs.getArray("file_paths");
+        if (filePathsArr != null) {
+            dto.setFilePaths(Arrays.asList((String[]) filePathsArr.getArray()));
+        }
+
+        dto.setDocReqJson(rs.getString("doc_req"));
+
+        dto.setUploadStatus(rs.getBoolean("upload_status"));
+        dto.setDocUploadPath(rs.getString("doc_uplaod_path"));
+
+        dto.setCif(rs.getString("cif"));
+        dto.setAccntNo(rs.getString("accnt_no"));
+        dto.setPpfAccntNo(rs.getString("ppf_accnt_no"));
+        dto.setUpiId(rs.getString("upi_id"));
+        dto.setJrny(rs.getString("jrny"));
+
+        return dto;
+    }
+}
+
+xxxxxxxxxxx
+
+
+
+
+
 
 @Component
 public class EtbTriggerReader implements ItemReader<List<EtbTriggerDto>> {
