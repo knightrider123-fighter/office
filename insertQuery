@@ -1,3 +1,39 @@
+FROM yono_dcmnt.edms_upload_doc edms
+JOIN yono_dcmnt.dcmnt_mstr mstr
+    ON mstr.doc_id IN ('DC_001','DC_002','DC_010','DC_007')
+
+WHERE
+    edms.upload_status = false
+    AND edms.channel_id in ('Y2EDNRK01N','Y2EDSRK02E','Y2EDSRK02D','Y2EDSRK02D','Y2EDSRK04E','Y2EDSRK04E'
+'Y2EDSRK06D','Y2EDNRK07N','Y2EDSRK08E','Y2EDSRK09E','Y2EDNRK10N','Y2EDNRK11N','Y2EDSRK12E');
+
+
+channel_id in ('Y2EDNRK01N') DC_026.pdf
+
+channel_id  in ('Y2EDSRK02E','Y2EDSRK02D','Y2EDSRK04E','Y2EDSRK08E','Y2EDSRK12E')
+DC_010 -->KYC.pdf
+DC_009 -->KYC_1.pdf
+DC_002 -->CIS.webm
+DC_020 -->VIDEO.jpeg
+DC_004 -->Photo.jpeg
+DC_027 -->Annexture_B.pdf
+
+
+channel_id in ('Y2EDNRK07N','Y2EDNRK10N','Y2EDNRK10N')
+DC_027 -->Annexture_B
+
+
+channel_id in ('Y2EDSRK09E')
+DC_010 -->KYC.pdf
+DC_009 -->KYC_1.pdf
+DC_002 -->CIS.pdf
+DC_020 -->VIDEO.webm
+DC_004 -->Photo.jpeg
+DC_005 -->Sign.jpeg
+DC_027 -->Annexture_B.pdf
+
+
+
 
 INSERT INTO yono_dcmnt.edms_doc_dtls ( 
     ref_no,
