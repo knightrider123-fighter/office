@@ -1,3 +1,57 @@
+WITH sequence_generator(seq) AS (
+    SELECT generate_series(1, 1) AS seq
+),
+-- Use another CTE to format the sequence number and add random alphabets
+formatted_refs(ref_no_val, seq_val) AS (
+    SELECT
+    'SBIY2ECA' ||
+	LPAD(FLOOR(RANDOM() * 100)::text, 2, '0') ||
+	LPAD(FLOOR(RANDOM() * 367)::text, 3, '0') ||
+	LPAD(FLOOR(RANDOM() * 25)::text, 2, '0') ||
+	LPAD(FLOOR(RANDOM() * 61)::text, 2, '0') ||
+	LPAD(FLOOR(RANDOM() * 1000)::text, 3, '0') ||
+	SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' 
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' 
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' 
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' 
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' 
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' 
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+	SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' 
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' 
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1),
+        seq
+    FROM sequence_generator
+)
+-- Perform the actual insert using the generated ref_no_val and sequence
+INSERT INTO yono_dcmnt.edms_upload_doc (
+ref_no, channel_id, no_of_poa, no_of_poi, no_of_kyc, no_of_others, upload_status, response_status, doc_uplaod_path, crtd_by, updtd_by, crtd_dt, updtd_dt
+   )
+SELECT 
+    ref_no_val,
+    'Y2EDNSA',           -- Channel_Id
+     0,                  -- no_of_poa
+    0,                  --  no_of_poi
+    0,			-- no_of_kyc
+    0,                  -- no_of_kyc
+    'false',            -- upload_status
+    NULL,                    -- response_status
+    NULL,             -- doc_uplaod_path
+    NULL,                   -- crtd_by
+    NULL,            -- updtd_by
+    NOW(),          -- crtd_dt
+NOW()               -- updtd_dt
+FROM formatted_refs;
+
+
+channel_id  in ('Y2EDNRK01N','Y2EDSRK02E','Y2EDSRK02D','Y2EDSRK02D','Y2EDSRK04E','Y2EDSRK04E'
+'Y2EDSRK06D','Y2EDNRK07N','Y2EDSRK08E','Y2EDSRK09E','Y2EDNRK10N','Y2EDNRK11N','Y2EDSRK12E')
 
 
 
