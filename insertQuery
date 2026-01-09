@@ -1,4 +1,11 @@
 
+
+
+
+
+
+
+
 INSERT INTO yono_dcmnt.edms_doc_dtls (
     ref_no,
     doc_id,
