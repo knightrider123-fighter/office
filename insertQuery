@@ -1,3 +1,83 @@
+
+INSERT INTO yono_dcmnt.edms_doc_dtls ( 
+    ref_no,
+    doc_id,
+    doc_edms_map,
+    file_name,
+    id_no,
+    ckyc_no,
+    cersai_flag,
+    archival_flag,
+    doc_type,
+    scanned_dt,
+    doc_code,
+    doc_category,
+    doc_identifier,
+    doc_expiry_date,
+    cmmnts,
+    file_path,
+    crtd_by,
+    updtd_by,
+    crtd_dt,
+    updtd_dt
+)
+SELECT 
+    edms.ref_no,
+    mstr.doc_id,
+    mstr.edms_doc,
+
+    /* ===== file_name ===== */
+    CONCAT(
+        edms.ref_no, '_', mstr.file_name,
+        CASE
+            WHEN mstr.doc_id IN ('DC_001','DC_002','DC_010') THEN '.pdf'
+            WHEN mstr.doc_id = 'DC_007' THEN '.jpeg'
+        END
+    ),
+
+    NULL,
+    987654321012345,
+    false,
+    true,
+    mstr.edms_id,
+    NOW(),
+    mstr.edms_id,
+    mstr.edms_id,
+    mstr.edms_id,
+    NOW() + INTERVAL '2 years',
+    NULL,
+
+    /* ===== file_path ===== */
+    CONCAT(
+        '/opt/Documents/', edms.ref_no, '/',
+        edms.ref_no, '_', mstr.file_name,
+        CASE
+            WHEN mstr.doc_id IN ('DC_001','DC_002','DC_010') THEN '.pdf'
+            WHEN mstr.doc_id = 'DC_007' THEN '.jpeg'
+        END
+    ),
+
+    'SYSTEM',
+    'SYSTEM',
+    NOW(),
+    NOW()
+
+FROM yono_dcmnt.edms_upload_doc edms
+JOIN yono_dcmnt.dcmnt_mstr mstr
+    ON mstr.doc_id IN ('DC_001','DC_002','DC_010','DC_007')
+
+WHERE
+    edms.upload_status = false
+    AND edms.channel_id IN ('Y2EDNCA','Y2EBNCA','Y2EBNSA');
+
+
+
+
+
+
+
+
+
  INSERT INTO  yono_dcmnt.edms_doc_dtls (
   ref_no, doc_id, doc_edms_map, file_name, id_no, ckyc_no, cersai_flag, archival_flag, doc_type, scanned_dt, doc_code, doc_category, doc_identifier, doc_expiry_date, cmmnts, file_path, crtd_by, updtd_by, crtd_dt, updtd_dt )
 SELECT
