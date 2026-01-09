@@ -1,3 +1,71 @@
+ INSERT INTO  yono_dcmnt.edms_doc_dtls (
+  ref_no, doc_id, doc_edms_map, file_name, id_no, ckyc_no, cersai_flag, archival_flag, doc_type, scanned_dt, doc_code, doc_category, doc_identifier, doc_expiry_date, cmmnts, file_path, crtd_by, updtd_by, crtd_dt, updtd_dt )
+SELECT
+    edms.ref_no, -- Selects ref_no from the source table
+mstr.doc_id, -- doc_id
+mstr.edms_doc,
+CONCAT(edms.ref_no,'_', mstr.file_name, '.pdf'), -- file_name
+NULL,
+987654321012345,
+'false',
+'true',
+mstr.edms_id,
+NOW(),
+mstr.edms_id,
+mstr.edms_id,
+mstr.edms_id,
+NOW() + INTERVAL '2 years',
+NULL,
+CONCAT('/opt/Documents/', edms.ref_no , '/' , edms.ref_no,'_', mstr.file_name, '.pdf'),
+'SYSTEM',
+'SYSTEM',
+NOW(),
+NOW()
+
+FROM
+   yono_dcmnt.edms_upload_doc edms  
+join yono_dcmnt.dcmnt_mstr mstr
+on mstr.doc_id in ('DC_025')
+WHERE
+   upload_status = 'false' and channel_id in ('Y2EDNCA','Y2EBNCA'); 
+   
+   
+  
+ INSERT INTO  yono_dcmnt.edms_doc_dtls (
+  ref_no, doc_id, doc_edms_map, file_name, id_no, ckyc_no, cersai_flag, archival_flag, doc_type, scanned_dt, doc_code, doc_category, doc_identifier, doc_expiry_date, cmmnts, file_path, crtd_by, updtd_by, crtd_dt, updtd_dt )
+SELECT
+    edms.ref_no, -- Selects ref_no from the source table
+mstr.doc_id, -- doc_id
+mstr.edms_doc,
+CONCAT(edms.ref_no,'_', mstr.file_name, '.jpeg'), -- file_name
+NULL,
+987654321012345,
+'false',
+'true',
+mstr.edms_id,
+NOW(),
+mstr.edms_id,
+mstr.edms_id,
+mstr.edms_id,
+NOW() + INTERVAL '2 years',
+NULL,
+CONCAT('/opt/Documents/', edms.ref_no , '/' , edms.ref_no,'_', mstr.file_name, '.jpeg'),
+'SYSTEM',
+'SYSTEM',
+NOW(),
+NOW()
+
+FROM
+   yono_dcmnt.edms_upload_doc edms  
+join yono_dcmnt.dcmnt_mstr mstr
+on mstr.doc_id in ('DC_007','DC_008','DC_003')
+WHERE
+   upload_status = 'false' and channel_id in ('Y2EBNCA','Y2EBNSA'); 
+
+
+
+
+
 WITH channel_input AS (
     SELECT * FROM (
         VALUES
