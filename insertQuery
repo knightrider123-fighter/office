@@ -1,3 +1,96 @@
+WITH channel_input AS (
+    -- channel_id , number_of_entries
+    SELECT * FROM (
+        VALUES
+        ('Y2EDNRK01N', 2),
+        ('Y2EDSRK02E', 3),
+        ('Y2EDSRK02D', 1),
+        ('Y2EDSRK04E', 2),
+        ('Y2EDSRK06D', 1),
+        ('Y2EDNRK07N', 2),
+        ('Y2EDSRK08E', 1),
+        ('Y2EDSRK09E', 1),
+        ('Y2EDNRK10N', 1),
+        ('Y2EDNRK11N', 1),
+        ('Y2EDSRK12E', 2)
+    ) AS t(channel_id, cnt)
+),
+sequence_generator AS (
+    SELECT
+        channel_id,
+        generate_series(1, cnt) AS seq
+    FROM channel_input
+),
+formatted_refs AS (
+    SELECT
+        'SBIY2ECA' ||
+        LPAD(FLOOR(RANDOM() * 100)::text, 2, '0') ||
+        LPAD(FLOOR(RANDOM() * 367)::text, 3, '0') ||
+        LPAD(FLOOR(RANDOM() * 25)::text, 2, '0') ||
+        LPAD(FLOOR(RANDOM() * 61)::text, 2, '0') ||
+        LPAD(FLOOR(RANDOM() * 1000)::text, 3, '0') ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        SUBSTRING('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1) ||
+        '-' || row_number() OVER ()     -- 🔒 HARD UNIQUENESS GUARANTEE
+        AS ref_no,
+        channel_id
+    FROM sequence_generator
+)
+
+INSERT INTO yono_dcmnt.edms_upload_doc (
+    ref_no,
+    channel_id,
+    no_of_poa,
+    no_of_poi,
+    no_of_kyc,
+    no_of_others,
+    upload_status,
+    response_status,
+    doc_uplaod_path,
+    crtd_by,
+    updtd_by,
+    crtd_dt,
+    updtd_dt
+)
+SELECT
+    ref_no,
+    channel_id,
+    0,
+    0,
+    0,
+    0,
+    false,
+    NULL,
+    NULL,
+    'SYSTEM',
+    'SYSTEM',
+    NOW(),
+    NOW()
+FROM formatted_refs;
+
+
+
+
+
+
+
+
+
+
 WITH sequence_generator(seq) AS (
     SELECT generate_series(1, 1) AS seq
 ),
