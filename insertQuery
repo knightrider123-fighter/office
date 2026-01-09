@@ -1,6 +1,69 @@
 
 
+WITH channel_ids AS (
+    SELECT
+        unnest(ARRAY[
+            'Y2EDNSA',
+            'Y2EDNRI',
+            'Y2EDSA',
+            'Y2EDCA'
+        ]) AS channel_id,
+        row_number() OVER () AS rn
+),
+sequence_generator AS (
+    SELECT
+        generate_series(1, 20) AS seq,
+        row_number() OVER () AS rn
+),
+formatted_refs AS (
+    SELECT
+        'SBIY2EA' ||
+        LPAD(FLOOR(RANDOM() * 100)::text, 2, '0') ||
+        LPAD(FLOOR(RANDOM() * 367)::text, 3, '0') ||
+        LPAD(FLOOR(RANDOM() * 25)::text, 2, '0') ||
+        LPAD(FLOOR(RANDOM() * 61)::text, 2, '0') ||
+        LPAD(FLOOR(RANDOM() * 1000)::text, 3, '0') ||
+        SUBSTRING(
+            'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+            FROM FLOOR(RANDOM() * 46)::int + 1 FOR 1
+        ) ||
+        seq AS ref_no,
+        rn
+    FROM sequence_generator
+)
 
+INSERT INTO yono_dcmnt.edms_upload_doc (
+    ref_no,
+    channel_id,
+    no_of_poa,
+    no_of_poi,
+    no_of_kyc,
+    no_of_others,
+    upload_status,
+    response_status,
+    doc_upload_path,
+    crtd_by,
+    updtd_by,
+    crtd_dt,
+    updtd_dt
+)
+SELECT
+    f.ref_no,
+    c.channel_id,
+    0,
+    0,
+    0,
+    0,
+    false,
+    NULL,
+    NULL,
+    'SYSTEM',
+    'SYSTEM',
+    NOW(),
+    NOW()
+FROM formatted_refs f
+JOIN channel_ids c
+    ON ((f.rn - 1) % (SELECT COUNT(*) FROM channel_ids)) + 1 = c.rn;
 
 
 
