@@ -1,3 +1,107 @@
+package com.sbi.yono.document.batch.processor.etb;
+
+import java.util.List;
+
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
+import com.sbi.yono.document.batch.dto.EtbTriggerDto;
+import com.sbi.yono.document.batch.dto.PhotoRetryDto;
+
+import com.sbi.yono.document.savingsaccount.edms.etbtrigger.EtbTriggers;
+import com.sbi.yono.document.savingsaccount.edms.phototrigger.PhotoTriggerCall;
+import com.tcs.techbone.logger.FLogger;
+
+@Service
+public class EtbTriggerAsyncService {
+	private static final String METHOD_STARTED = "Method Ended";
+
+	private static final String CLASS_NAME = "ProductMasterProcessor";
+	private static final String TIER_NAME = "Document";
+	private static final String METHOD_ENDED = "Method Ended";
+
+	
+	EtbTriggers etbTriggers;
+
+	public EtbTriggerAsyncService(EtbTriggers etbTriggers) {
+		
+		this.etbTriggers=etbTriggers;
+	}
+
+	@Async
+	public void sendEdmsReq(List<EtbTriggerDto> etbTriggerList) {
+		String methodName = "sendEdmsReq";
+		FLogger.info(TIER_NAME, CLASS_NAME, methodName, METHOD_STARTED);
+
+		etbTriggers.callEtbTrigger(etbTriggerList);
+		FLogger.info(TIER_NAME, CLASS_NAME, methodName, METHOD_ENDED);
+
+	}
+
+}
+
+
+
+
+
+package com.sbi.yono.document.batch.processor.etb;
+
+import java.util.List;
+import java.util.Objects;
+
+import org.json.JSONException;
+import org.springframework.batch.item.ItemProcessor;
+
+import com.sbi.yono.document.batch.dto.EtbTriggerDto;
+import com.sbi.yono.document.batch.dto.PhotoRetryDto;
+import com.tcs.techbone.logger.FLogger;
+
+public class EtbTriggerProcessor implements ItemProcessor<List<EtbTriggerDto>, List<EtbTriggerDto>> {
+	private static final String METHOD_STARTED = "Method Ended";
+
+	private static final String CLASS_NAME = "ProductMasterProcessor";
+	private static final String TIER_NAME = "Document";
+	private static final String METHOD_ENDED = "Method Ended";
+
+	private final EtbTriggerAsyncService etbTriggerAsyncService;
+
+	public EtbTriggerProcessor(EtbTriggerAsyncService etbTriggerAsyncService) {
+		this.etbTriggerAsyncService = etbTriggerAsyncService;
+	}
+
+	@Override
+	public List<EtbTriggerDto> process(List<EtbTriggerDto> photoRetryDtoList) throws JSONException {
+		String methodName = "process";
+		FLogger.info(TIER_NAME, CLASS_NAME, methodName, METHOD_STARTED);
+		
+				etbTriggerAsyncService.sendEdmsReq(photoRetryDtoList);
+		
+		
+		FLogger.info(TIER_NAME, CLASS_NAME, methodName, METHOD_ENDED);
+		return photoRetryDtoList;
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 package com.sbi.yono.document.batch.processor.rekyc;
 
 import java.util.List;
