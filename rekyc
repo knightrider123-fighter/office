@@ -1,3 +1,69 @@
+package com.sbi.yono.document.batch.reader;
+
+import java.util.List;
+
+import javax.sql.DataSource;
+
+import org.springframework.batch.item.ItemReader;
+import org.springframework.batch.item.ParseException;
+import org.springframework.batch.item.UnexpectedInputException;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+
+import com.sbi.yono.document.batch.dto.EtbTriggerDto;
+import com.sbi.yono.document.batch.dto.NtbReq;
+import com.sbi.yono.document.batch.rowmapper.EtbTriggerRowMapper;
+import com.sbi.yono.document.batch.rowmapper.NtbReqRowMapper;
+import com.sbi.yono.document.savingsaccount.edms.upload.EdmsUploadConstants;
+import com.tcs.techbone.channel.global.reader.GlobalConfigPropertiesReader;
+import com.tcs.techbone.exception.ServiceBusinessException;
+
+@Component
+public class ListReadingEtbTrigger implements ItemReader<List<EtbTriggerDto>> {
+
+	private final JdbcTemplate jdbcTemplate;
+	int pagesize = Integer.parseInt((String) GlobalConfigPropertiesReader.getInstance()
+			.getPropertyById(EdmsUploadConstants.EDMS_SEGEMENT_SIZE));
+	int interval = 10000;
+	private boolean finished = false;
+
+	public ListReadingEtbTrigger(DataSource dataSource) {
+		this.jdbcTemplate = new JdbcTemplate();
+		this.jdbcTemplate.setDataSource(dataSource);
+	}
+
+	@Override
+	public List<EtbTriggerDto> read() throws UnexpectedInputException, ParseException, ServiceBusinessException {
+		if (finished) {
+			return null;
+		}
+
+		String sql2 = new StringBuilder().append("SELECT b.ref_no, ").append(" b.channel_id, ").append(" a.cif")
+				.append(" FROM yono_dcmnt.edms_upload_doc b ")
+				.append(" LEFT JOIN yono_accnt.accnt_onbrdng_status a ON b.ref_no = a.ref_no ")
+				.append(" WHERE b.upload_status = false  and b.channel_id in ('Y2EDNCA','Y2EDNSA','Y2EBNCA','Y2EBNSA') ")
+				.append("and (b.updtd_dt<= NOW()-INTERVAL '6 SECONDS') ").append("order by b.updtd_dt asc limit ")
+				.append(100).toString();
+
+		List<EtbTriggerDto> list;
+
+		try {
+			list = jdbcTemplate.query(sql2, new EtbTriggerRowMapper(EtbTriggerDto.class));
+		} catch (DataAccessException e) {
+			throw new UnexpectedInputException("Failed to read items from the database.", e);
+		} catch (Exception e) {
+			throw new ServiceBusinessException(e);
+		}
+
+		if (list.isEmpty()) {
+			finished = true;
+			return null;
+		}
+		return list;
+
+	}
+}
 
 
 package com.sbi.yono.document.batch.processor.etb;
