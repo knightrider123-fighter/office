@@ -1,0 +1,84 @@
+package com.sbi.yono.document.batch.processor.rekyc;
+
+import java.util.List;
+import java.util.Objects;
+
+import org.json.JSONException;
+import org.springframework.batch.item.ItemProcessor;
+
+import com.sbi.yono.document.batch.dto.EtbTriggerDto;
+import com.sbi.yono.document.batch.dto.PhotoRetryDto;
+import com.sbi.yono.document.batch.dto.RekycTriggerDto;
+import com.tcs.techbone.logger.FLogger;
+
+public class RekycTriggerProcessor implements ItemProcessor<List<RekycTriggerDto>, List<RekycTriggerDto>> {
+	private static final String METHOD_STARTED = "Method Ended";
+
+	private static final String CLASS_NAME = "ProductMasterProcessor";
+	private static final String TIER_NAME = "Document";
+	private static final String METHOD_ENDED = "Method Ended";
+
+	private final RekycTriggerAsyncService etbTriggerAsyncService;
+
+	public RekycTriggerProcessor(RekycTriggerAsyncService etbTriggerAsyncService) {
+		this.etbTriggerAsyncService = etbTriggerAsyncService;
+	}
+
+	@Override
+	public List<RekycTriggerDto> process(List<RekycTriggerDto> photoRetryDtoList) throws JSONException {
+		String methodName = "process";
+		FLogger.info(TIER_NAME, CLASS_NAME, methodName, METHOD_STARTED);
+		
+				etbTriggerAsyncService.sendEdmsReq(photoRetryDtoList);
+		
+		
+		FLogger.info(TIER_NAME, CLASS_NAME, methodName, METHOD_ENDED);
+		return photoRetryDtoList;
+	}
+}
+
+
+
+
+
+package com.sbi.yono.document.batch.processor.rekyc;
+
+import java.util.List;
+
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
+import com.sbi.yono.document.batch.dto.EtbTriggerDto;
+import com.sbi.yono.document.batch.dto.PhotoRetryDto;
+import com.sbi.yono.document.batch.dto.RekycTriggerDto;
+import com.sbi.yono.document.savingsaccount.edms.etbtrigger.EtbTriggers;
+import com.sbi.yono.document.savingsaccount.edms.phototrigger.PhotoTriggerCall;
+import com.sbi.yono.document.savingsaccount.edms.rekyctrigger.RekycTriggerSvc;
+import com.tcs.techbone.logger.FLogger;
+
+@Service
+public class RekycTriggerAsyncService {
+	private static final String METHOD_STARTED = "Method Ended";
+
+	private static final String CLASS_NAME = "ProductMasterProcessor";
+	private static final String TIER_NAME = "Document";
+	private static final String METHOD_ENDED = "Method Ended";
+
+	RekycTriggerSvc rekycTriggerSvc;
+
+	public RekycTriggerAsyncService(RekycTriggerSvc rekycTriggerSvc ) {
+
+		this.rekycTriggerSvc = rekycTriggerSvc;
+	}
+
+	@Async
+	public void sendEdmsReq(List<RekycTriggerDto> rekycTriggerList) {
+		String methodName = "sendEdmsReq";
+		FLogger.info(TIER_NAME, CLASS_NAME, methodName, METHOD_STARTED);
+		rekycTriggerSvc.callRekycTrigger(rekycTriggerList);
+		
+		FLogger.info(TIER_NAME, CLASS_NAME, methodName, METHOD_ENDED);
+
+	}
+
+}
