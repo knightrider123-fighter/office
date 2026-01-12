@@ -1,3 +1,154 @@
+
+
+package com.sbi.yono.document.batch.processor.etb;
+
+import java.util.List;
+
+import org.json.JSONException;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import com.sbi.yono.document.batch.dto.EtbTriggerDto;
+
+class EtbTriggerProcessorTest {
+
+    private EtbTriggerAsyncService asyncService;
+    private EtbTriggerProcessor processor;
+
+    @BeforeEach
+    void setUp() {
+        asyncService = Mockito.mock(EtbTriggerAsyncService.class);
+        processor = new EtbTriggerProcessor(asyncService);
+    }
+
+    @Test
+    void process_shouldCallAsyncService_andReturnSameList() throws JSONException {
+        List<EtbTriggerDto> inputList = List.of(new EtbTriggerDto());
+
+        List<EtbTriggerDto> result = processor.process(inputList);
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(inputList, result);
+        Mockito.verify(asyncService, Mockito.times(1))
+               .sendEdmsReq(inputList);
+    }
+
+    @Test
+    void process_withEmptyList_shouldStillCallAsyncService() throws JSONException {
+        List<EtbTriggerDto> inputList = List.of();
+
+        List<EtbTriggerDto> result = processor.process(inputList);
+
+        Assertions.assertNotNull(result);
+        Assertions.assertTrue(result.isEmpty());
+        Mockito.verify(asyncService, Mockito.times(1))
+               .sendEdmsReq(inputList);
+    }
+
+    @Test
+    void process_withNullList_shouldPassNullToAsyncService() throws JSONException {
+        List<EtbTriggerDto> result = processor.process(null);
+
+        Assertions.assertNull(result);
+        Mockito.verify(asyncService, Mockito.times(1))
+               .sendEdmsReq(null);
+    }
+
+    @Test
+    void process_shouldNotThrowException() {
+        Assertions.assertDoesNotThrow(() -> processor.process(List.of()));
+    }
+
+    @Test
+    void process_shouldInvokeAsyncExactlyOnce() throws JSONException {
+        List<EtbTriggerDto> list = List.of(new EtbTriggerDto());
+
+        processor.process(list);
+
+        Mockito.verify(asyncService, Mockito.only())
+               .sendEdmsReq(list);
+    }
+}
+
+
+
+
+package com.sbi.yono.document.batch.processor.etb;
+
+import java.util.List;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import com.sbi.yono.document.batch.dto.EtbTriggerDto;
+import com.sbi.yono.document.savingsaccount.edms.etbtrigger.EtbTriggers;
+
+class EtbTriggerAsyncServiceTest {
+
+    private EtbTriggers etbTriggers;
+    private EtbTriggerAsyncService asyncService;
+
+    @BeforeEach
+    void setUp() {
+        etbTriggers = Mockito.mock(EtbTriggers.class);
+        asyncService = new EtbTriggerAsyncService(etbTriggers);
+    }
+
+    @Test
+    void sendEdmsReq_shouldCallEtbTriggerService() {
+        List<EtbTriggerDto> list = List.of(new EtbTriggerDto());
+
+        asyncService.sendEdmsReq(list);
+
+        Mockito.verify(etbTriggers, Mockito.times(1))
+               .callEtbTrigger(list);
+    }
+
+    @Test
+    void sendEdmsReq_withEmptyList_shouldStillInvokeService() {
+        List<EtbTriggerDto> list = List.of();
+
+        asyncService.sendEdmsReq(list);
+
+        Mockito.verify(etbTriggers, Mockito.times(1))
+               .callEtbTrigger(list);
+    }
+
+    @Test
+    void sendEdmsReq_withNullList_shouldStillInvokeService() {
+        asyncService.sendEdmsReq(null);
+
+        Mockito.verify(etbTriggers, Mockito.times(1))
+               .callEtbTrigger(null);
+    }
+
+    @Test
+    void sendEdmsReq_shouldNotThrowException() {
+        Assertions.assertDoesNotThrow(() ->
+                asyncService.sendEdmsReq(List.of())
+        );
+    }
+
+    @Test
+    void sendEdmsReq_shouldCallServiceOnlyOnce() {
+        List<EtbTriggerDto> list = List.of(new EtbTriggerDto());
+
+        asyncService.sendEdmsReq(list);
+
+        Mockito.verify(etbTriggers, Mockito.only())
+               .callEtbTrigger(list);
+    }
+}
+
+
+
+
+
+
 package com.sbi.yono.document.batch.processor.etb;
 
 import java.util.List;
