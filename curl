@@ -1,0 +1,32 @@
+curl -kv 'http://localhost:8080/Document/APIServices/common_edms_call' \
+--header 'datatype: application/json' \
+--header 'channelid: 1002' \
+--header 'transactionid: fv32801706608001265119' \
+--header 'tokentype: jwt' \
+--header 'channelkey: YONOBRANCH2.0' \
+--header 'sessiontokenid;' \
+--header 'httpheaderinfo: {"content-length":"10","datatype":"application/json","channelkey":"YONOBRANCH2.0","postman-token":"2898565b-c332-4147-9468-e25314575c27","host":"localhost:8080","content-type":"application/json","client_ip":"0.0.0.0.0.0.0.1","transactionid":"fv32801706608001265119"}' \
+--header 'txnId: 123456' \
+--header 'Authorization: Basic Og==' \
+--form 'RequestBody="{
+    \"body\": {
+        \"refNo\": \"SBIY2NRI260281501965OhFuVpFV\"
+    }
+}"'
+
+
+curl -kv 'http://localhost:8080/Document/APIServices/common_edms_call' \
+--header 'datatype: application/json' \
+--header 'channelid: 1002' \
+--header 'transactionid: fv32801706608001265119' \
+--header 'tokentype: jwt' \
+--header 'channelkey: YONOBRANCH2.0' \
+--header 'sessiontokenid;' \
+--header 'httpheaderinfo: {"content-length":"10","datatype":"application/json","channelkey":"YONOBRANCH2.0","postman-token":"2898565b-c332-4147-9468-e25314575c27","host":"localhost:8080","content-type":"application/json","client_ip":"0.0.0.0.0.0.0.1","transactionid":"fv32801706608001265119"}' \
+--header 'txnId: 123456' \
+--header 'Authorization: Basic Og==' \
+--form 'RequestBody="{
+    \"body\": {
+        \"refNo\": \"SBIY2NRI260321102840GO6azGhV\"
+    }
+}"'
