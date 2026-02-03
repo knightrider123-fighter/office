@@ -30,3 +30,17 @@ curl -kv 'http://localhost:8080/Document/APIServices/common_edms_call' \
         \"refNo\": \"SBIY2NRI260321102840GO6azGhV\"
     }
 }"'
+
+curl -kv http://localhost:8080/Document/APIServices/common_edms_call \
+  -H "Content-Type: application/json" \
+  -H "channelid: 1002" \
+  -H "transactionid: fv32801706608001265119" \
+  -H "tokentype: jwt" \
+  -H "channelkey: YONOBRANCH2.0" \
+  -H "txnId: 123456" \
+  -H "Authorization: Basic Og==" \
+  -d '{
+        "body": {
+          "refNo": "SBIY2NRI260281501965OhFuVpFV"
+        }
+      }'
