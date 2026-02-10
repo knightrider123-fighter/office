@@ -3,3 +3,28 @@
 SELECT ref_no, cif, channel_id, job_id, crtd_dt, updtd_dt, crtd_by, updtd_by, error_code, error_description
 	FROM yono_dcmnt.edms_error ;
 "SBIY2260271201268wssuRaAV"	"85002586250"	"Y2NBSSA"	"NTB-BR"	"2026-01-27 14:28:20.19208"	"2026-01-27 16:08:21.917155"	"SYSTEM"	"SYSTEM_RETRY"	1001	"Error due to missing documents : [AOF]"
+
+
+INSERT INTO yono_dcmnt.edms_error (
+    ref_no,
+    cif,
+    channel_id,
+    job_id,
+    crtd_dt,
+    updtd_dt,
+    crtd_by,
+    updtd_by,
+    error_code,
+    error_description
+) VALUES (
+    'SBIY2260271201268wssuRaAV',
+    '85002586250',
+    'Y2NBSSA',
+    'NTB-BR',
+    '2026-01-27 14:28:20.19208',
+    '2026-01-27 16:08:21.917155',
+    'SYSTEM',
+    'SYSTEM_RETRY',
+    1001,
+    'Error due to missing documents : [AOF]'
+);
