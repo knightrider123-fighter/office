@@ -1,0 +1,120 @@
+package com.sbi.yono.document.savingsaccount.edms.rekycupload;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsDocDetailsRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsUploadDoc;
+import com.sbi.yono.document.savingsaccount.edms.upload.EdmsUploadConstants;
+import com.sbi.yono.document.savingsaccount.edms.uploaddoc.UploadDocumentSvc;
+import com.sbi.yono.document.savingsaccount.edms.utility.CmnParamsConst;
+import com.sbi.yono.document.savingsaccount.edms.utility.CombineImagesToPDF;
+import com.tcs.techbone.exception.ServiceBusinessException;
+import com.tcs.techbone.logger.FLogger;
+
+@Service
+public class RekyOvdCombine {
+	public static final String FAILED_STRING = "Failed";
+	public static final String SYSTEM_CONSTANT = "SYSTEM";
+	private EdmsDocDetailsRepo edmsDocDtlsRepo;
+	private UploadDocumentSvc uploadDocumentSvc;
+
+	public RekyOvdCombine(EdmsDocDetailsRepo edmsDocDtlsRepo, UploadDocumentSvc uploadDocumentSvc) {
+		this.edmsDocDtlsRepo = edmsDocDtlsRepo;
+		this.uploadDocumentSvc = uploadDocumentSvc;
+
+	}
+
+	public String combineUploadResponse(String refNo, String channelId, EdmsUploadDoc edmsUploadDoc) {
+		String thisMethod = "combineUploadResponse";
+		CombineImagesToPDF combine = new CombineImagesToPDF();
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(), Constants.METHOD_STARTED);
+		FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+				"Verifing ChannelID for Combine Doc Creation");
+		Optional<List<EdmsDocDetails>> edmsDocDetailsValue = edmsDocDtlsRepo.findBycompositeKeysRefNo(refNo);
+		List<String> channelIdArrayListForCombine = Arrays.asList(
+				CmnParamsConst.getMap().get(EdmsUploadConstants.Y2EBSRK_CHNANGES_OVD),
+				CmnParamsConst.getMap().get(EdmsUploadConstants.Y2EBSRKC_CHNANGES_CERSAI_OVD));
+		if (!channelIdArrayListForCombine.contains(channelId)) {
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+					"No need to For combine Doc ready for Validate next ");
+			return "Success";
+		}
+		if (edmsDocDetailsValue.isEmpty()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					"REFERENCE_NUMBER_IS_PRESENT_IN_DOC_DTLS_TABLE");
+			String errorDescription = "Combine creation failed, optional is empty EDMS_DOC_IS EMPLTY";
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+					errorDescription + " " + "Combine creation failed, optional is empty");
+
+			return "Failed ";
+		}
+		List<EdmsDocDetails> documents = edmsDocDetailsValue.get();
+		List<String> imagePaths = getPathCombine(documents);
+		if (imagePaths.isEmpty()) {
+			String errorDescription = "Combine cant be created Image path is empty";
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+					errorDescription + " Combine cant be created");
+
+			return FAILED_STRING;
+		}
+		String base64 = null;
+		try {
+			base64 = combine.combineImagesToBaseSixtyFour(imagePaths, refNo);
+		} catch (ServiceBusinessException e) {
+			String errorDescription = "Combine cant be created issue in base64 combine generation";
+			FLogger.error(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+					"Combine cant be created issue in base64 combine generation " + errorDescription + " "
+							+ e.getMessage());
+
+			return FAILED_STRING;
+		}
+		String status = null;
+		try {
+			status = uploadDocumentSvc.documentUpload(refNo, Constants.IDTYPE24, Constants.COMBINE, ".jpeg", base64);
+		} catch (ServiceBusinessException e) {
+
+			FLogger.info(Constants.TIER_NAME, thisMethod, this.getClass().getName(),
+					"Combine cant be created issue in base64 combine generation " + e.getMessage());
+
+			return FAILED_STRING;
+		}
+
+		return status;
+	}
+
+	/**
+	 * Method Name: getPathCombine Image combine for File path
+	 * 
+	 * @param documents
+	 * @return List<String>
+	 */
+	public List<String> getPathCombine(List<EdmsDocDetails> documents) {
+		String thisMethod = "getPathCombine";
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		ArrayList<String> imagePaths = new ArrayList<>();
+		for (EdmsDocDetails edmsUploadDoc2 : documents) {
+			if (Arrays.asList(Constants.IDTYPE11, Constants.IDTYPE12, Constants.IDTYPE13, Constants.IDTYPE14,
+					Constants.IDTYPE15, Constants.IDTYPE16, Constants.IDTYPE17, Constants.IDTYPE18, Constants.IDTYPE19)
+					.contains(edmsUploadDoc2.getDocId())) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, "DOC ID's");
+				File file = new File(edmsUploadDoc2.getFilePath());
+				if (file.exists()) {
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+							"IMAGE_IS_PRESENT_ON_PATH so adding to arrayList");
+					imagePaths.add(edmsUploadDoc2.getFilePath());
+				}
+			}
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return imagePaths;
+	}
+
+}
