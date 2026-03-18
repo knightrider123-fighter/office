@@ -1,0 +1,32 @@
+We require clarification and confirmation on the field mapping and document configuration for the EDMS upload related to the Government schemes.
+
+🔹 Field Mapping Confirmation
+
+Kindly confirm the correct mapping for the following fields:
+	•	applicationID
+	•	branchCode
+	•	uniqueIdentifier
+	•	channelId
+
+🔹 Channel ID Details
+
+As per the information shared, we understand the following channel IDs:
+	•	Y2EBSCS – Senior Citizen Savings Scheme
+	•	Y2EBPPF – PPF
+	•	Y2EBMTM – Minor to Major
+
+Please confirm if the above mappings are correct and final.
+
+🔹 Document Mapping
+
+We request you to provide details on:
+	•	Which document(s) need to be uploaded for each channel ID
+	•	Any specific naming conventions or formats required
+
+🔹 EDMS Table Entries
+
+As discussed, we understand:
+	•	Document details will be inserted into yono_dcmnt_edms_doc_dtls
+	•	Entries will also be made in yono_dcmnt_edms_upload_doc table with initial status as false
+
+Please confirm if this approach is correct or suggest any required changes.
