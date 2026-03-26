@@ -234,3 +234,106 @@ public String combineBase64Images(List<String> base64Images, String leadId) thro
     }
 }
 
+
+
+public String combineBase64Images(List<String> base64Images, String leadId) throws ServiceBusinessException {
+
+    String thisMethod = "combineBase64Images";
+    FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisMethod, "START");
+
+    try {
+        if (base64Images == null || base64Images.isEmpty()) {
+            FLogger.error(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod,
+                    "No images provided for leadId: " + leadId);
+            return null;
+        }
+
+        List<BufferedImage> images = new ArrayList<>();
+
+        // Step 1: Decode Base64 → BufferedImage
+        for (String base64 : base64Images) {
+
+            // Remove prefix if present
+            if (base64.contains(",")) {
+                base64 = base64.split(",")[1];
+            }
+
+            byte[] bytes = Base64.getDecoder().decode(base64);
+            BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
+
+            if (img == null) {
+                throw new ServiceBusinessException("Invalid image format");
+            }
+
+            images.add(img);
+        }
+
+        // Step 2: Find max width (we normalize to this)
+        int maxWidth = images.stream()
+                .mapToInt(BufferedImage::getWidth)
+                .max()
+                .orElse(0);
+
+        // Step 3: Resize images proportionally
+        List<BufferedImage> resizedImages = new ArrayList<>();
+        int totalHeight = 0;
+
+        for (BufferedImage img : images) {
+
+            int newWidth = maxWidth;
+            int newHeight = (img.getHeight() * newWidth) / img.getWidth();
+
+            BufferedImage resized = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2d = resized.createGraphics();
+
+            // High quality rendering 🔥
+            g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // White background
+            g2d.setColor(Color.WHITE);
+            g2d.fillRect(0, 0, newWidth, newHeight);
+
+            g2d.drawImage(img, 0, 0, newWidth, newHeight, null);
+            g2d.dispose();
+
+            resizedImages.add(resized);
+            totalHeight += newHeight;
+        }
+
+        // Step 4: Combine vertically
+        BufferedImage combined = new BufferedImage(maxWidth, totalHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = combined.createGraphics();
+
+        // White background
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, maxWidth, totalHeight);
+
+        int currentHeight = 0;
+
+        for (BufferedImage img : resizedImages) {
+            int x = (maxWidth - img.getWidth()) / 2; // center alignment
+            g.drawImage(img, x, currentHeight, null);
+            currentHeight += img.getHeight();
+        }
+
+        g.dispose();
+
+        // Step 5: Convert to Base64
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(combined, "jpg", baos);
+
+        String finalBase64 = Base64.getEncoder().encodeToString(baos.toByteArray());
+
+        FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisMethod, "END");
+        return finalBase64;
+
+    } catch (Exception e) {
+        FLogger.error(UtilityConstant.TIER_NAME, this.getClass().getSimpleName(), thisMethod,
+                "Error combining images for leadId: " + leadId + " " + ExceptionUtils.getStackTrace(e));
+
+        throw new ServiceBusinessException("Error combining Base64 images for leadId: " + leadId);
+    }
+}
+
