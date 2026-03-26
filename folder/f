@@ -1,0 +1,60 @@
+	public String combineImagesToBaseSixtyFour(List<String> imagePaths, String leadId) throws ServiceBusinessException {
+		String thisMethod = UtilityConstant.COMBINE_IMAGES_TO_BASE_SIXTY_FOUR;
+		FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisMethod, UtilityConstant.ADD_IMAGE_TO_PDF_THREE);
+		try {
+			FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisMethod, UtilityConstant.ADDING_IMAGE_TO_PDF);
+			BufferedImage[] images = new BufferedImage[imagePaths.size()];
+			if (imagePaths.isEmpty()) {
+				FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod,
+						UtilityConstant.IMAGES_NOT_AVAILABLE_ON_GIVEN_PATH);
+				ServiceBusinessException e = new ServiceBusinessException();
+				FLogger.error(UtilityConstant.TIER_NAME, CombineImagesToPDF.class.getSimpleName(), thisMethod,
+						UtilityConstant.EXCEPTION_IMAGES_ARE_NOT_PRESENT_ON_PATH_FOR_LEAD_ID + leadId
+								+ UtilityConstant.STRING_EMPTY_SPACE + ExceptionUtils.getStackTrace(e));
+				FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod,
+						UtilityConstant.METHOD_END);
+				return null;
+			}
+			for (int i = UtilityConstant.ZERO_VALUE; i < imagePaths.size(); i++) {
+				images[i] = ImageIO.read(new File(imagePaths.get(i)));
+			}
+
+			int combinedWidth = UtilityConstant.ZERO_VALUE;
+			int combinedHeight = UtilityConstant.ZERO_VALUE;
+
+			for (BufferedImage image : images) {
+				FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod,
+						UtilityConstant.IMAGES_NOT_AVAILABLE_ON_GIVEN_PATH);
+				combinedWidth = Math.max(combinedWidth, image.getWidth());
+				combinedHeight += image.getHeight();
+			}
+
+			BufferedImage combinedImage = new BufferedImage(combinedWidth, combinedHeight, BufferedImage.TYPE_INT_RGB);
+			Graphics2D g = combinedImage.createGraphics();
+
+			int currentHeight = UtilityConstant.ZERO_VALUE;
+			for (BufferedImage image : images) {
+				FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod,
+						UtilityConstant.IMAGES_NOT_AVAILABLE_ON_GIVEN_PATH);
+				g.drawImage(image, UtilityConstant.ZERO_VALUE, currentHeight, null);
+				currentHeight += image.getHeight();
+			}
+
+			g.dispose();
+
+			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+			ImageIO.write(combinedImage, UtilityConstant.JPEG, baos);
+			byte[] imageBytes = baos.toByteArray();
+
+			String baseSixtyFour = Base64.getEncoder().encodeToString(imageBytes);
+			FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisMethod, UtilityConstant.METHOD_END);
+			return baseSixtyFour;
+
+		} catch (IOException e) {
+			FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisMethod, UtilityConstant.ERROR_CATCH);
+			FLogger.error(UtilityConstant.TIER_NAME, CombineImagesToPDF.class.getSimpleName(), thisMethod,
+					UtilityConstant.ERROR_COMBINING_IMAGES + leadId + UtilityConstant.STRING_EMPTY_SPACE
+							+ ExceptionUtils.getStackTrace(e));
+			throw new ServiceBusinessException(UtilityConstant.ERROR_COMBINING_IMAGES_FOR_LEAD_ID + leadId);
+		}
+	}
