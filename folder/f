@@ -58,3 +58,76 @@
 			throw new ServiceBusinessException(UtilityConstant.ERROR_COMBINING_IMAGES_FOR_LEAD_ID + leadId);
 		}
 	}
+
+
+
+public String combineBase64Images(List<String> base64Images, String leadId) throws ServiceBusinessException {
+
+    String thisMethod = "combineBase64Images";
+    FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisMethod, "START");
+
+    try {
+        if (base64Images == null || base64Images.isEmpty()) {
+            FLogger.error(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod,
+                    "No images provided for leadId: " + leadId);
+            return null;
+        }
+
+        // Step 1: Convert Base64 → BufferedImage
+        BufferedImage[] images = new BufferedImage[base64Images.size()];
+
+        for (int i = 0; i < base64Images.size(); i++) {
+
+            byte[] imageBytes = Base64.getDecoder().decode(base64Images.get(i));
+            ByteArrayInputStream bis = new ByteArrayInputStream(imageBytes);
+
+            images[i] = ImageIO.read(bis);
+
+            if (images[i] == null) {
+                throw new ServiceBusinessException("Invalid image at index " + i);
+            }
+        }
+
+        // Step 2: Calculate combined size
+        int combinedWidth = 0;
+        int combinedHeight = 0;
+
+        for (BufferedImage image : images) {
+            combinedWidth = Math.max(combinedWidth, image.getWidth());
+            combinedHeight += image.getHeight();
+        }
+
+        // Step 3: Combine images vertically
+        BufferedImage combinedImage = new BufferedImage(
+                combinedWidth,
+                combinedHeight,
+                BufferedImage.TYPE_INT_RGB
+        );
+
+        Graphics2D g = combinedImage.createGraphics();
+
+        int currentHeight = 0;
+        for (BufferedImage image : images) {
+            g.drawImage(image, 0, currentHeight, null);
+            currentHeight += image.getHeight();
+        }
+
+        g.dispose();
+
+        // Step 4: Convert combined image → Base64
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(combinedImage, "jpg", baos);
+
+        byte[] finalImageBytes = baos.toByteArray();
+        String resultBase64 = Base64.getEncoder().encodeToString(finalImageBytes);
+
+        FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisMethod, "END");
+        return resultBase64;
+
+    } catch (Exception e) {
+        FLogger.error(UtilityConstant.TIER_NAME, this.getClass().getSimpleName(), thisMethod,
+                "Error combining images for leadId: " + leadId + " " + ExceptionUtils.getStackTrace(e));
+
+        throw new ServiceBusinessException("Error combining Base64 images for leadId: " + leadId);
+    }
+}
