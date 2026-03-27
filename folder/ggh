@@ -26,3 +26,41 @@ public class FolderUtil {
         Files.setPosixFilePermissions(path, perms);
     }
 }
+
+import java.io.IOException;
+import java.nio.file.*;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Set;
+
+public class FileUtil {
+
+    public static void writeFileWith777(String folderPath, String fileName, byte[] data) throws IOException {
+
+        Path dirPath = Paths.get(folderPath);
+
+        // ✅ 1. Create directory if not exists
+        if (!Files.exists(dirPath)) {
+            Files.createDirectories(dirPath);
+        }
+
+        // ✅ 2. Set 777 to directory
+        set777Permission(dirPath);
+
+        // ✅ 3. Create file path
+        Path filePath = dirPath.resolve(fileName);
+
+        // ✅ 4. Write file
+        Files.write(filePath, data, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+        // ✅ 5. Set 777 to file
+        set777Permission(filePath);
+    }
+
+    private static void set777Permission(Path path) throws IOException {
+        Set<PosixFilePermission> perms =
+                PosixFilePermissions.fromString("rwxrwxrwx");
+
+        Files.setPosixFilePermissions(path, perms);
+    }
+}
