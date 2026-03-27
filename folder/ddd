@@ -305,3 +305,70 @@ public Object maskObject(Object arg) {
         return arg;
     }
 }
+
+
+
+
+
+public Map<Object, Object> maskInstanceOfMap(Object arg) {
+
+    if (arg == null) {
+        return Collections.emptyMap();
+    }
+
+    Gson g = new Gson().newBuilder().disableHtmlEscaping().serializeNulls().create();
+
+    Map<Object, Object> tempMap = g.fromJson(g.toJson(arg),
+            new TypeToken<Map<String, Object>>() {}.getType());
+
+    Map<Object, Object> value = new HashMap<>();
+
+    tempMap.forEach((k, v) -> {
+
+        // 🔹 CASE 1: Nested Map
+        if (v instanceof Map) {
+            value.put(k, maskInstanceOfMap(v));
+        }
+
+        // 🔹 ✅ CASE 2: LIST FIX (THIS IS WHAT YOU NEED)
+        else if (v instanceof List) {
+
+            List<?> list = (List<?>) v;
+            List<Object> maskedList = new ArrayList<>();
+
+            for (Object item : list) {
+
+                // 🔥 if list contains JSON (Map)
+                if (item instanceof Map) {
+                    maskedList.add(maskInstanceOfMap(item)); // recursion
+                }
+
+                // 🔥 if list contains primitive/string
+                else {
+                    String val = item != null ? item.toString() : "null";
+
+                    if (val.length() > 4) {
+                        maskedList.add(MASK + val.substring(val.length() - 4));
+                    } else {
+                        maskedList.add(item);
+                    }
+                }
+            }
+
+            value.put(k, maskedList); // ✅ IMPORTANT: keep as list
+        }
+
+        // 🔹 CASE 3: Normal fields
+        else {
+            String parmValue2 = Objects.nonNull(v) ? v.toString() : "null";
+
+            if (MASKED_PARAMS.contains(k.toString()) && parmValue2.length() > 4) {
+                value.put(k, MASK + parmValue2.substring(parmValue2.length() - 4));
+            } else {
+                value.put(k, v);
+            }
+        }
+    });
+
+    return value;
+}
