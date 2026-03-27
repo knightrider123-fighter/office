@@ -252,3 +252,56 @@ maskInstanceOfMap(args)
     ],
     "uniqueIdentifier": "SBIY2MTM260851203241EshLr6cQ"
 }
+
+
+
+public Object maskObject(Object arg) {
+
+    if (arg == null) return null;
+
+    // 🔹 CASE 1: Map
+    if (arg instanceof Map) {
+        Map<?, ?> map = (Map<?, ?>) arg;
+        Map<Object, Object> result = new HashMap<>();
+
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            Object key = entry.getKey();
+            Object value = entry.getValue();
+
+            if (value instanceof Map || value instanceof List) {
+                result.put(key, maskObject(value)); // 🔥 recursion
+            } else {
+                String val = value != null ? value.toString() : "null";
+
+                if (MASKED_PARAMS.contains(key.toString()) && val.length() > 4) {
+                    result.put(key, MASK + val.substring(val.length() - 4));
+                } else {
+                    result.put(key, value);
+                }
+            }
+        }
+        return result;
+    }
+
+    // 🔹 CASE 2: List
+    else if (arg instanceof List) {
+        List<?> list = (List<?>) arg;
+        List<Object> maskedList = new ArrayList<>();
+
+        for (Object item : list) {
+            maskedList.add(maskObject(item)); // 🔥 recursion
+        }
+
+        return maskedList; // ✅ keeps it as List
+    }
+
+    // 🔹 CASE 3: Primitive / String
+    else {
+        String val = arg.toString();
+
+        if (val.length() > 4) {
+            return MASK + val.substring(val.length() - 4);
+        }
+        return arg;
+    }
+}
