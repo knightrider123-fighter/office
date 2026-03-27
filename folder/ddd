@@ -1,0 +1,241 @@
+package com.sbi.yono.document.savingsaccount.edms.utility;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.aspectj.lang.JoinPoint;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.Signature;
+import org.aspectj.lang.annotation.AfterThrowing;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.core.DefaultParameterNameDiscoverer;
+import org.springframework.stereotype.Component;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
+import com.google.gson.reflect.TypeToken;
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.tcs.techbone.logger.FLogger;
+
+import lombok.SneakyThrows;
+
+/**
+ * Aspect Class for general and error logging throughout the application.
+ * 
+ */
+@Aspect
+@Component
+public class LoggingAspect {
+
+	private static final String MASK = "********";
+
+	/**
+	 * Package to use for Aspect oriented logging
+	 */
+	private static final String PACKAGE_STRUCTURE = "execution(* com.sbi.yono.customer..*(..))";
+
+	/**
+	 * Package to use for Aspect oriented logging for error stack trace
+	 */
+	private static final String ERROR_PACKAGE_STRUCTURE = "execution(* com.sbi.yono..*(..))";
+
+	/**
+	 * List of parameter names that needs to be masked while logging
+	 */
+	private static final List<String> MASKED_PARAMS = List.of("cifNumber", "mobileNo", "pan", "acct_no",
+			"applicantFirstName", "applicantLastName", "applicantMiddleName", "applicantNamePrefix", "dob",
+			"acctNumber","branchCode","base64Str","ckycNumber","base64","base64","applicationID");
+
+	/**
+	 * Method Name: logging Method to log general logs using {@code @Around} aspect.
+	 * 
+	 * @param joinPoint {@link ProceedingJoinPoint}
+	 * @return {@code proceed} method
+	 * @throws Throwable
+	 */
+	@Around(PACKAGE_STRUCTURE)
+	public Object logging(JoinPoint joinPoint) {
+		Signature signature = joinPoint.getSignature();
+		String className = signature.getDeclaringType().getSimpleName();
+		String methodName = signature.getName();
+		long start = System.currentTimeMillis();
+		FLogger.debug(Constants.TIER_NAME, className, methodName,
+				new StringBuilder().append(className).append(".").append(methodName).append(": ")
+						.append(FLogger.METHOD_STARTED_PARAMS)
+						.append(Arrays.toString(maskArgs(new DefaultParameterNameDiscoverer()
+								.getParameterNames(((MethodSignature) signature).getMethod()), joinPoint.getArgs())))
+						.toString());
+
+		FLogger.trace(Constants.TIER_NAME, className, methodName,
+				new StringBuilder().append(className).append(".").append(methodName).append(": ")
+						.append(FLogger.METHOD_STARTED_PARAMS).append(Arrays.toString(joinPoint.getArgs())).toString());
+
+		Object proceed = proceed(joinPoint);
+
+		FLogger.trace(Constants.TIER_NAME, className, methodName,
+				new StringBuilder().append(className).append(".").append(methodName).append(": ")
+						.append(FLogger.METHOD_ENDED_RETURN).append(proceed).append(" in ")
+						.append(System.currentTimeMillis() - start).append(" ms").toString());
+		FLogger.debug(Constants.TIER_NAME, className, methodName,
+				new StringBuilder().append(className).append(".").append(methodName).append(": ")
+						.append(FLogger.METHOD_ENDED_RETURN).append(maskArg(methodName, proceed)).append(" in ")
+						.append(System.currentTimeMillis() - start).append(" ms").toString());
+
+		return proceed;
+	}
+
+	/**
+	 * Method Name: errorLogging Method to log error logs using {@code @Around}
+	 * aspect.
+	 * 
+	 * @param joinPoint {@link ProceedingJoinPoint}
+	 * @param e         Throwable to fetch error details
+	 */
+	@AfterThrowing(pointcut = ERROR_PACKAGE_STRUCTURE, throwing = "e")
+	public void errorLogging(JoinPoint joinPoint, Throwable e) {
+		String methodName = joinPoint.getSignature().getName();
+		FLogger.error(Constants.TIER_NAME, joinPoint.getSignature().getDeclaringType().getSimpleName(), methodName,
+				"Exception in " + methodName + ":\n", ExceptionUtils.getStackTrace(e));
+	}
+
+	/**
+	 * Method Name: proceed Method to invoke {@code ProceedingJoinPoint.proceed()}
+	 * method
+	 * 
+	 * @param joinPoint {@link ProceedingJoinPoint}
+	 * @return next advice method
+	 * @throws Throwable
+	 */
+	@SneakyThrows
+	public Object proceed(JoinPoint joinPoint) {
+		return ((ProceedingJoinPoint) joinPoint).proceed();
+	}
+
+	/**
+	 * Method Name: maskArgs Method to mask PII and SPII data if passed in the
+	 * arguments.
+	 * 
+	 * @param paramNames Array of parameter names passed in the method.
+	 * @param args       Array of object parameter values passed in the method.
+	 * @param methodName
+	 * @return Array of object containing method name and value.
+	 */
+	public Object[] maskArgs(String[] paramNames, Object[] args) {
+		if (Objects.isNull(args) || args.length == 0)
+			return args;
+
+		Object[] maskedArgs = new Object[args.length];
+		for (int i = 0; i < args.length; i++) {
+			Object arg = (Optional.ofNullable(args[i]).orElse("null"));
+
+			String string = Objects.nonNull(paramNames) ? paramNames[i] : "param" + (i + 1);
+			try {
+				maskedArgs[i] = string + ": " + maskInstanceOfMap(arg);
+			} catch (JsonParseException e) {
+				if (arg instanceof List) {
+					maskedArgs[i] = string + maskInstanceOfList(arg);
+				} else if ((MASKED_PARAMS.contains(string) && arg.toString().length() > 4))
+					maskedArgs[i] = new StringBuilder().append(string).append(": ").append(MASK)
+							.append(arg.toString().substring(arg.toString().length() - 4));
+				else
+					maskedArgs[i] = new StringBuilder().append(string).append(": ").append(arg);
+			}
+		}
+		return maskedArgs;
+	}
+
+	/**
+	 * Method Name: maskArg Method to mask PII and SPII data if returned in a
+	 * method.
+	 * 
+	 * @param paramNames Array of parameter names passed in the method.
+	 * @param arg        Array of object parameter values passed in the method.
+	 * @return Array of object containing method name and value.
+	 */
+	public Object maskArg(String methodName, Object arg) {
+		if (Objects.nonNull(arg) && arg.toString().length() > 4 && (methodName.contains("findById")
+				|| methodName.contains("findAll") || methodName.contains("save") || methodName.contains("Mask")))
+			try {
+				return maskInstanceOfMap(arg);
+			} catch (JsonParseException e) {
+				if (arg instanceof List) {
+					return maskInstanceOfList(arg);
+				} else
+					return new StringBuilder().append(MASK)
+							.append(arg.toString().substring(arg.toString().length() - 4));
+			}
+		else
+			return arg;
+	}
+
+	/**
+	 * Method Name: maskInstanceOfMap Method to mask sensitive data if the object is
+	 * {@code instanceOf} {@link Map}
+	 * 
+	 * @param arg Object to be checked for SPII data
+	 * @return Map containing masked SPII data if any
+	 */
+	public Map<Object, Object> maskInstanceOfMap(Object arg) {
+
+		if (arg == null) {
+			return Collections.emptyMap();
+		}
+		Gson g = new Gson().newBuilder().disableHtmlEscaping().serializeNulls().create();
+		Map<Object, Object> tempMap = g.fromJson(g.toJson(arg), new TypeToken<Map<String, Object>>() {
+		}.getType());
+		Map<Object, Object> value = new HashMap<>();
+
+		tempMap.forEach((k, v) -> {
+			if (v instanceof Map) {
+				Map<Object, Object> tempMap2 = g.fromJson(g.toJson(v), new TypeToken<Map<String, Object>>() {
+				}.getType());
+				value.put(k, maskInstanceOfMap(tempMap2));
+			} else {
+				String parmValue2 = Objects.nonNull(v) ? v.toString() : "null";
+				if ((MASKED_PARAMS.contains(k.toString()) && parmValue2.length() > 4))
+					value.put(k,
+							new StringBuilder().append(MASK).append(parmValue2.substring(parmValue2.length() - 4)));
+				else
+					value.put(k, v);
+			}
+
+		});
+		return value;
+	}
+
+	/**
+	 * Method Name: maskInstanceOfList Method to mask sensitive data if the object
+	 * is {@code instanceOf} {@link List}
+	 * 
+	 * @param arg Object to be checked for SPII data
+	 * @return Map containing masked SPII data if any
+	 */
+	public StringBuilder maskInstanceOfList(Object arg) {
+		List<?> list = (List<?>) arg;
+		StringBuilder sb = new StringBuilder();
+		list.forEach(v -> {
+			try {
+				sb.append(maskInstanceOfMap(v));
+			} catch (JsonParseException e) {
+				if (v.toString().length() > 4)
+					sb.append(MASK).append(v.toString().substring(v.toString().length() - 4));
+				else
+					sb.append(v);
+			}
+		});
+		return sb;
+	}
+}
+
+
+
+
+maskInstanceOfMap(args)
