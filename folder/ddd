@@ -239,3 +239,16 @@ public class LoggingAspect {
 
 
 maskInstanceOfMap(args)
+
+
+{
+    "applicationID": "********BMTM",
+    "branchCode": "********0437",
+    "documents": [
+        {
+            "base64": "/9j/4AAQSkZJRgABAgAAAQABAAD9k=",
+            "documentName": "Form4.jpeg"
+        }
+    ],
+    "uniqueIdentifier": "SBIY2MTM260851203241EshLr6cQ"
+}
