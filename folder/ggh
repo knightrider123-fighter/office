@@ -1,0 +1,28 @@
+import java.io.IOException;
+import java.nio.file.*;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Set;
+
+public class FolderUtil {
+
+    public static void createFolderWith777(String folderPath) throws IOException {
+
+        Path path = Paths.get(folderPath);
+
+        // ✅ 1. Create directory (including parents)
+        if (!Files.exists(path)) {
+            Files.createDirectories(path);
+        }
+
+        // ✅ 2. Set 777 permission
+        set777Permission(path);
+    }
+
+    private static void set777Permission(Path path) throws IOException {
+        Set<PosixFilePermission> perms =
+                PosixFilePermissions.fromString("rwxrwxrwx");
+
+        Files.setPosixFilePermissions(path, perms);
+    }
+}
