@@ -1,0 +1,1121 @@
+package com.sbi.yono.document.savingsaccount.edms.upload;
+
+import java.io.IOException;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.SignatureException;
+import java.util.Arrays;
+
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.SecretKey;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.sbi.yono.document.savingsaccount.edms.bean.EDMSResponse;
+import com.sbi.yono.document.savingsaccount.edms.bean.TempReqBean;
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.encryption.EDMSEncryption;
+import com.sbi.yono.document.savingsaccount.edms.encryption.SSLUtil;
+import com.sbi.yono.document.savingsaccount.edms.ntbupload.TempReqBeanNtb;
+import com.sbi.yono.document.savingsaccount.edms.utility.CmnParamsConst;
+import com.tcs.techbone.logger.FLogger;
+
+@Service
+public class CallApi {
+
+	/**
+	 * Method Name : callEDMSAPI Description: This method generate callEDMSAPI
+	 * String Method to create final request and send temporary request to EDMS
+	 * using RestTemplate.postForEntity().
+	 * 
+	 * @param request
+	 * @param edmsURL
+	 * @param edmsServerPublicKey
+	 * @param privateKey
+	 * @param channelId
+	 * @return EDMSResponse
+	 */
+	public EDMSResponse callEDMSAPI(Object request, String edmsURL, PublicKey edmsServerPublicKey,
+			PrivateKey privateKey, String channelId) {
+		String thisMethod = EdmsUploadConstants.CALL_EDMSAPI;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		EDMSEncryption edmsEncryption = new EDMSEncryption();
+		Gson gson = new GsonBuilder().create();
+		RestTemplate restTemplate = new RestTemplate();
+		String uniqueVKYCServerID = null;
+		uniqueVKYCServerID = edmsEncryption.generateUniqueServerId();
+		String uniqueSourceServerID = uniqueServerIdGeneration(channelId, uniqueVKYCServerID);
+		SecretKey aesKey = edmsEncryption.generateAESkey();
+		String encryptedUniqueSourceServerID = null;
+		if (null == edmsServerPublicKey) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EDMS_SERVER_PUBLIC_KEY_NOT_PRESENT);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.ENCRYPTED_UNIQUE_SOURCE_SERVER_ID_PRESENT);
+			encryptedUniqueSourceServerID = edmsEncryption.encryptRawJSON(aesKey, edmsServerPublicKey,
+					uniqueSourceServerID);
+		} catch (IllegalBlockSizeException | IOException e2) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.ENCRYPTED_UNIQUE_SOURCE_SERVER_ID_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EXCEPTION_ENCRYPTED_UNIQUE_SOURCE_SERVER_ID_NOT_PRESENT
+							+ ExceptionUtils.getStackTrace(e2));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+
+		FLogger.info(uniqueSourceServerID, encryptedUniqueSourceServerID);
+		HttpHeaders tempHeaders = new HttpHeaders();
+		tempHeaders.setContentType(MediaType.APPLICATION_JSON);
+		tempHeaders.add(Constants.SIGNED_SENDER_TOKEN, EdmsUploadConstants.EMPTY);
+		HttpEntity<String> requestToSend = new HttpEntity<>(encryptedUniqueSourceServerID, tempHeaders);
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.SSL_UTILITY);
+			SSLUtil.turnOffSSLChecking();
+		} catch (KeyManagementException | NoSuchAlgorithmException e1) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.SSL_UTILITY_NOT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.SSL_UTILITY_NOT + ExceptionUtils.getStackTrace(e1));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		ResponseEntity<String> responseString = null;
+		try {
+			responseString = restTemplate.postForEntity(edmsURL, requestToSend, String.class);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, String.valueOf(responseString));
+		} catch (RestClientException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.ERROR_IN_RESPONSE_STRING);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.ERROR_IN_RESPONSE_STRING + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+
+		if (responseString.getStatusCode() != HttpStatusCode.valueOf(200)) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.UNABLE_TO_CONNECT_THE_SERVER);
+		}
+		String edmsResponse = responseString.getBody();
+		String[] tempResponse = new String[2];
+
+		if (null != edmsResponse && !edmsResponse.isEmpty()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EDMS_RESPONSE_PRESENT);
+			tempResponse = edmsResponse.split(EdmsUploadConstants.COMMA);
+		}
+		if (tempResponse.length < EdmsUploadConstants.TWO) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.TEMP_RESPONSE_LENGHT_IS_LESS_THAN_TWO);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		String encReceiverAccessToken = tempResponse[EdmsUploadConstants.INT_ZERO];
+		String signedReceiverTokenHash = tempResponse[EdmsUploadConstants.INT_ONE];
+
+		if (null == encReceiverAccessToken || null == signedReceiverTokenHash) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.ENC_RECEIVER_ACCESS_TOKEN_OR_SIGNED_RECEIVER_TOKEN_HASH_IS_NULL);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		if (null == privateKey) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.PRIVATE_KEY_NOT_PRESENT);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		String receiverAccessToken = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.RECEIVER_ACCESS_TOKEN_PRESENT);
+			receiverAccessToken = edmsEncryption.decReceiverAccessToken(privateKey, encReceiverAccessToken);
+		} catch (IOException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.RECEIVER_ACCESS_TOKEN_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.EXCEPTION_RECEIVER_ACCESS_TOKEN_NOT_PRESENT + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		if (null == receiverAccessToken) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.RECEIVER_ACCESS_TOKEN_NOT_PRESENT);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		String senderTokenHash = null;
+		senderTokenHash = edmsEncryption.generateSenderTokenHash(receiverAccessToken);
+		if (null == senderTokenHash) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.SENDER_ACCESS_TOKEN_NOT_PRESENT);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		boolean hashMatched = false;
+		hashMatched = edmsEncryption.verifyReceiverTokenHash(edmsServerPublicKey, signedReceiverTokenHash,
+				senderTokenHash);
+		if (hashMatched) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EdmsUploadConstants.HASH_MATCHED);
+			String signedSenderTokenHash = null;
+			try {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EdmsUploadConstants.SIGNED_SENDER_TOKEN_HASH_PRESENT);
+				signedSenderTokenHash = edmsEncryption.signSenderTokenHash(privateKey, senderTokenHash);
+				if (null == signedSenderTokenHash) {
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+							EdmsUploadConstants.SIGNED_SENDER_TOKEN_HASH_NOT_PRESENT);
+					FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+					return null;
+				}
+			} catch (NoSuchAlgorithmException | SignatureException e) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EdmsUploadConstants.SIGNED_SENDER_TOKEN_HASH_NOT_PRESENT);
+				FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EdmsUploadConstants.EXCEPTION_SIGNED_SENDER_TOKEN_HASH_NOT_PRESENT
+								+ ExceptionUtils.getStackTrace(e));
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+				return null;
+			}
+			String signedSenderTokenHashWithID = signedSenderTokenHash + EdmsUploadConstants.COMMA + uniqueVKYCServerID;
+			signedSenderTokenHashWithID = signedSenderTokenHashWithID.replace(EdmsUploadConstants.BACK_SLASH_N,
+					EdmsUploadConstants.EMPTY);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			try {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EdmsUploadConstants.REUSE_TOKEN_PRESENT);
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+				return reuseToken(signedSenderTokenHashWithID, request, gson, edmsURL, edmsServerPublicKey, privateKey);
+			} catch (IllegalBlockSizeException | NoSuchAlgorithmException | IOException e) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EdmsUploadConstants.REUSE_TOKEN_NOT_PRESENT);
+				FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EdmsUploadConstants.EXCEPTION_REUSE_TOKEN_NOT_PRESENT + ExceptionUtils.getStackTrace(e));
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+				return null;
+			}
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.HASH_MATCHED_FALSE);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+	}
+
+	/**
+	 * Method Name: uniqueServerIdGeneration Description: Generate Unique Source
+	 * Server Id
+	 * 
+	 * @param channelId
+	 * @param uniqueVKYCServerID
+	 * @return String
+	 */
+	public String uniqueServerIdGeneration(String channelId, String uniqueVKYCServerID) {
+		String thisMethod = EdmsUploadConstants.UNIQUE_SERVER_ID_GENERATION;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		Gson gsonOne = new GsonBuilder().serializeNulls().disableHtmlEscaping().setPrettyPrinting().create();
+		TempReqBeanNtb tempReq = new TempReqBeanNtb();
+		TempReqBean tempReqBean = new TempReqBean();
+		String uniqueSourceServerID;
+		if (Arrays
+				.asList(CmnParamsConst.getMap().get(Constants.NTB_APPWEB_SA_EKYC_KEY),
+						CmnParamsConst.getMap().get(Constants.NTB_APPWEB_CA_EKYC_KEY),
+						CmnParamsConst.getMap().get(Constants.ETB_APPWEB_PF_KEY),
+						CmnParamsConst.getMap().get(EdmsUploadConstants.REKYC_SECOND_E_KEY),
+						CmnParamsConst.getMap().get(EdmsUploadConstants.REKYC_SECOND_D_KEY),
+						CmnParamsConst.getMap().get(EdmsUploadConstants.REKYC_FOURTH_E_KEY),
+						CmnParamsConst.getMap().get(EdmsUploadConstants.REKYC_SIXTH_D_KEY),
+						CmnParamsConst.getMap().get(EdmsUploadConstants.REKYC_EIGHTH_E_KEY),
+						CmnParamsConst.getMap().get(EdmsUploadConstants.REKYC_NINTH_E_KEY),
+						CmnParamsConst.getMap().get(EdmsUploadConstants.REKYC_TWELVE_E_KEY), "Y2EDNRI")
+				.contains(channelId)) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.CALL_API_FOR_PATH2);
+			if (channelId.contains(EdmsUploadConstants.REKYC_VID_CHANNLE_ID)) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EdmsUploadConstants.REKYC_TEMP_REQ);
+				channelId = EdmsUploadConstants.REKYC_VID_CHANNLE_ID;
+			}
+			tempReq.setUniqueVKYCServerID(uniqueVKYCServerID);
+			if (channelId.equals("Y2EDNRI")||channelId.equals("Y2NDSSA")) {
+				tempReq.setChannelID("Y2NDSSA");
+				uniqueSourceServerID = gsonOne.toJson(tempReq);
+			} else {
+				tempReq.setChannelID(channelId);
+				uniqueSourceServerID = gsonOne.toJson(tempReq);
+			}
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.CALL_API_FOR_PATH_FOUR);
+			tempReqBean.setUniqueSourceServerID(uniqueVKYCServerID);
+			tempReqBean.setChannelID(channelId);
+			uniqueSourceServerID = gsonOne.toJson(tempReqBean);
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return uniqueSourceServerID;
+	}
+
+	/**
+	 * Method Name : reuseToken Description : This method generate reuseToken
+	 * EDMSResponse
+	 * 
+	 * @param signedSenderTokenHashWithID
+	 * @param request
+	 * @param gsonOne
+	 * @param edmsURL
+	 * @param edmsServerPublicKey
+	 * @param privateKey
+	 * @return EDMSResponse
+	 * @throws IllegalBlockSizeException
+	 * @throws IOException
+	 * @throws NoSuchAlgorithmException
+	 */
+	public EDMSResponse reuseToken(String signedSenderTokenHashWithID, Object request, Gson gsonOne, String edmsURL,
+			PublicKey edmsServerPublicKey, PrivateKey privateKey)
+			throws IllegalBlockSizeException, IOException, NoSuchAlgorithmException {
+		String thisMethod = EdmsUploadConstants.REUSE_TOKEN;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		EDMSEncryption edmsEncryption = new EDMSEncryption();
+		Gson gson = null;
+		if (gsonOne != null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.GSON_BUILDER_PRESENT);
+			gson = gsonOne;
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.GSON_BUILDER_NOT_PRESENT);
+			gson = new GsonBuilder().create();
+		}
+		HttpHeaders headers = new HttpHeaders();
+		RestTemplate restTemplate = new RestTemplate(getClientHttpRequestFactory(15000, 45000));
+		String decryptedResponse = null;
+		String finalJSONReq = null;
+		finalJSONReq = gson.toJson(request);
+		if (null == finalJSONReq) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.FINAL_JSON_REQ_IS_NULL);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		SecretKey aesKey = null;
+		aesKey = edmsEncryption.generateAESkey();
+		if (null == aesKey) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.AES_KEY_NOT_PRSNT);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		String encryptedRequest = null;
+		encryptedRequest = edmsEncryption.encryptRawJSON(aesKey, edmsServerPublicKey, finalJSONReq);
+		FLogger.info(finalJSONReq, encryptedRequest);
+
+		headers.setContentType(MediaType.APPLICATION_JSON);
+		headers.add(Constants.SIGNED_SENDER_TOKEN, signedSenderTokenHashWithID);
+		HttpEntity<String> finalRequestToEDMS = null;
+
+		finalRequestToEDMS = new HttpEntity<>(encryptedRequest, headers);
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.SSL_UTIL_TURN_OFF_SSL_CHECKING);
+			SSLUtil.turnOffSSLChecking();
+		} catch (KeyManagementException | NoSuchAlgorithmException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.SSL_UTIL_TURN_OFF_SSL_CHECKING_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.SSL_UTIL_TURN_OFF_SSL_CHECKING_NOT_PRESENT + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		ResponseEntity<String> finalResponseString = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.FINAL_RESPONSE_STRING_CHECKING);
+			SSLUtil.turnOffSSLChecking();
+			finalResponseString = restTemplate.postForEntity(edmsURL, finalRequestToEDMS, String.class);
+		} catch (RestClientException | KeyManagementException | IllegalArgumentException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.FINAL_RESPONSE_STRING_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.FINAL_RESPONSE_STRING_NOT_PRESENT + ExceptionUtils.getStackTrace(e));
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		if (finalResponseString.getStatusCode() != HttpStatusCode.valueOf(EdmsUploadConstants.TWO_HUNDRED)) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.UNABLE_TO_CONNECT_TO_THE_SERVER);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+
+		String encFinalResponseFromEDMS = finalResponseString.getBody();
+		if (null == privateKey) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.PRIVATE_KEY_NOT_PRESENT);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		decryptedResponse = edmsEncryption.decryptResponse(encFinalResponseFromEDMS, privateKey);
+		if (null == decryptedResponse) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.DECRYPTED_RESPONSE_NULL);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+		EDMSResponse finalResponse = gson.fromJson(decryptedResponse, EDMSResponse.class);
+		if (finalResponse.getResponseCode() != null && !finalResponse.getResponseCode().isEmpty()) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.FINAL_RESPONSE_PRESENT);
+			EDMSResponse dl = finalResponse;
+			if (finalResponse.getResponseCode().contains(EdmsUploadConstants.ZERO_ZERO)) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EdmsUploadConstants.RESPONSE_CODE_CONTAINS_ZERO);
+			}
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return dl;
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EdmsUploadConstants.RESPONSE_CODE_NULL);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return null;
+		}
+	}
+
+	/**
+	 * Method Name : getClientHttpRequestFactory Description :
+	 * SimpleClientHttpRequestFactory getClientHttpRequestFactory
+	 * 
+	 * @param connectTimeout
+	 * @param readTimeout
+	 * @return SimpleClientHttpRequestFactory
+	 */
+	public static SimpleClientHttpRequestFactory getClientHttpRequestFactory(int connectTimeout, int readTimeout) {
+		String thisMethod = EdmsUploadConstants.GET_CLIENT_HTTP_REQUEST_FACTORY;
+		FLogger.info(Constants.TIER_NAME, EdmsUploadConstants.THIS_CLASS, thisMethod, Constants.METHOD_STARTED);
+		SimpleClientHttpRequestFactory sc = new SimpleClientHttpRequestFactory();
+		sc.setConnectTimeout(connectTimeout);
+		sc.setReadTimeout(readTimeout);
+		FLogger.info(Constants.TIER_NAME, EdmsUploadConstants.THIS_CLASS, thisMethod, Constants.METHOD_END);
+		return sc;
+	}
+
+
+
+
+package com.sbi.yono.document.savingsaccount.edms.encryption;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.SecureRandom;
+import java.security.Signature;
+import java.security.SignatureException;
+import java.security.spec.MGF1ParameterSpec;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.KeyGenerator;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+import javax.crypto.ShortBufferException;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.OAEPParameterSpec;
+import javax.crypto.spec.PSource.PSpecified;
+
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.tcs.techbone.logger.FLogger;
+
+public class EDMSEncryption {
+
+	private static final int LENGTH = EncryptionConstants.LENGTH;
+
+	private static class AESKeyGenerationException extends RuntimeException {
+		private static final long serialVersionUID = 1L;
+
+		public AESKeyGenerationException(String message) {
+			super(message);
+		}
+	}
+
+	private static final SecureRandom secureRandom = new SecureRandom();
+
+	/**
+	 * Method Name : generateUniqueServerId Method to generate random Alphanumeric
+	 * Unique Server Id sent to EDMS during temporary request.
+	 * 
+	 * @return Random Alphanumeric string of length 16.
+	 */
+	public String generateUniqueServerId() {
+		String thisMethod = EncryptionConstants.GENERATEUNIQUESERVERID;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		StringBuilder sb = new StringBuilder(LENGTH);
+		for (int i = 0; i < LENGTH; i++) {
+			int index = secureRandom.nextInt(Constants.ALPHANUMERIC.length());
+			sb.append(Constants.ALPHANUMERIC.charAt(index));
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return sb.toString();
+	}
+
+	/**
+	 * Method Name : generateAESkey Method to generate Secret key using AES
+	 * algorithm.
+	 * 
+	 * @return SecretKey
+	 */
+	public SecretKey generateAESkey() {
+		String thisMethod = EncryptionConstants.GENERATEASEKEY;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		KeyGenerator aesKeyGenerator = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.INTO_TRY_GENERATEASEKEY);
+			aesKeyGenerator = KeyGenerator.getInstance(Constants.AES);
+		} catch (NoSuchAlgorithmException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.UNABLE_TO_UPLOAD_USER);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.UNABLE_TO_UPLOAD_USER + ExceptionUtils.getStackTrace(e));
+			throw new AESKeyGenerationException(Constants.RUNTIME_D);
+		}
+		aesKeyGenerator.init(256);
+		SecretKey aesKey = aesKeyGenerator.generateKey();
+		aesKey.hashCode();
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return aesKey;
+	}
+
+	/**
+	 * Method Name : encryptRawJSON Method to encrypt the data using a hybrid
+	 * crypto-system which uses GCM to encrypt the data and OAEP to encrypt the AES
+	 * key. The key size of the AES encryption will be 256 bit. All the default
+	 * parameter choices are used for OAEP and GCM using SHA-256 and MFG1 Padding.
+	 * 
+	 * @param aesKey
+	 * @param edmsServerPublicKey
+	 * @param rawJSON
+	 * @return Base64 encoded String.
+	 * @throws IllegalBlockSizeException
+	 * @throws IOException
+	 */
+	public String encryptRawJSON(SecretKey aesKey, PublicKey edmsServerPublicKey, String rawJSON)
+			throws IllegalBlockSizeException, IOException {
+		String thisMethod = EncryptionConstants.ENCRYPTION_RAW_JSON;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		Cipher oaep = null;
+		OAEPParameterSpec oaepParameterSpec = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.INTO_TRY_ENCRYPTION_RAW_JSON);
+			oaep = Cipher.getInstance(Constants.RSA);
+			oaepParameterSpec = new OAEPParameterSpec(Constants.SHA, Constants.MGF1, MGF1ParameterSpec.SHA256,
+					PSpecified.DEFAULT);
+		} catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EncryptionConstants.CIPHER_RSA);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.OEAP_PARAMETER_SPEC_NULL + ExceptionUtils.getStackTrace(e));
+			throw new AESKeyGenerationException(Constants.SHA);
+		}
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.INTO_TRY_ENCRYPTION_RAW_JSON);
+
+			oaep.init(Cipher.WRAP_MODE, edmsServerPublicKey, oaepParameterSpec);
+		} catch (InvalidAlgorithmParameterException | InvalidKeyException e1) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.OEAP_NOT_INITIALIZE);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.OEAP_NOT_INITIALIZE + ExceptionUtils.getStackTrace(e1));
+		}
+		ByteBuffer rawJSONBuffer = null;
+		rawJSONBuffer = ByteBuffer.wrap(rawJSON.getBytes(StandardCharsets.UTF_8));
+		byte[] wrappedKey = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.CONST_FLOGGER);
+			wrappedKey = oaep.wrap(aesKey);
+		} catch (IllegalBlockSizeException | InvalidKeyException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.WRAP_KEY_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.WRAP_KEY_NOT_PRESENT + ExceptionUtils.getStackTrace(e));
+			ExceptionUtils.getStackTrace(e);
+			throw new IllegalBlockSizeException(Constants.EXCEPTION);
+		}
+		Cipher aesGCM = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.ASEGCM_PRESENT);
+			aesGCM = Cipher.getInstance(Constants.AES_GCM);
+			GCMParameterSpec staticParameterSpec = new GCMParameterSpec(128, new byte[12]);
+			aesGCM.init(1, aesKey, staticParameterSpec);
+		} catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidAlgorithmParameterException
+				| InvalidKeyException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.GCM_PARAM_SPEC_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.GCM_PARAM_SPEC_NOT_PRESENT + ExceptionUtils.getStackTrace(e));
+			throw new IOException(Constants.EXCEPTION, e);
+		}
+		ByteBuffer cipherTextBuffer = null;
+		cipherTextBuffer = ByteBuffer
+				.allocate(Short.BYTES + oaep.getOutputSize(EncryptionConstants.OEAP_BYTE_SIZE / Byte.SIZE)
+						+ aesGCM.getOutputSize(rawJSON.getBytes(StandardCharsets.UTF_8).length));
+		if (wrappedKey == null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.WRAPPED_KEY_NOT_PRESENT);
+			throw new NullPointerException(Constants.WREPPEDKEY_C_B_N);
+		}
+		cipherTextBuffer.putShort((short) wrappedKey.length);
+		cipherTextBuffer.put(wrappedKey);
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.ASEGCM_DOFINAL_PRESENT);
+			aesGCM.doFinal(rawJSONBuffer, cipherTextBuffer);
+		} catch (Exception e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.ASEGCM_DOFINAL_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.ASEGCM_DOFINAL_NOT_PRESENT + ExceptionUtils.getStackTrace(e));
+			throw new IOException(Constants.CRYPTOGRAPHI_E_AES, e);
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return Base64.encodeBase64String(cipherTextBuffer.array());
+	}
+
+	/**
+	 * Method Name: decReceiverAccessToken Method to decrypt base64 encoded receiver
+	 * access token sent by EDMS in temporary response using RSA with SHA-256
+	 * algorithms.
+	 * 
+	 * @param privateKey
+	 * @param encReceiverAccessToken
+	 * @return String
+	 * @throws IOException
+	 */
+	public String decReceiverAccessToken(PrivateKey privateKey, String encReceiverAccessToken) throws IOException {
+		String thisMethod = EncryptionConstants.DEC_RECIVER_ACCESS_TOKEN;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		Cipher oaep = null;
+		OAEPParameterSpec oaepParameterSpec = null;
+		byte[] decReceiverAccessTokenBytes = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EncryptionConstants.OEAP_PRESENT);
+			oaep = Cipher.getInstance(Constants.RSA);
+			oaepParameterSpec = new OAEPParameterSpec(Constants.SHA, Constants.MGF1, MGF1ParameterSpec.SHA256,
+					PSpecified.DEFAULT);
+			oaep.init(Cipher.DECRYPT_MODE, privateKey, oaepParameterSpec);
+			byte[] tokenCipherTextBytes = null;
+			tokenCipherTextBytes = Base64.decodeBase64(encReceiverAccessToken.getBytes(StandardCharsets.UTF_8));
+			decReceiverAccessTokenBytes = oaep.doFinal(tokenCipherTextBytes);
+		} catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidAlgorithmParameterException
+				| InvalidKeyException | IllegalBlockSizeException | BadPaddingException e1) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.OEAP_INIT_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.OEAP_INIT_NOT_PRESENT + ExceptionUtils.getStackTrace(e1));
+			throw new IOException(Constants.EXCEPTION, e1);
+		}
+		if (decReceiverAccessTokenBytes != null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.DECR_REC_ACC_TKN_PRSNT);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return new String(decReceiverAccessTokenBytes, StandardCharsets.UTF_8);
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.DECR_REC_ACC_TKN_NOT_PRSNT);
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.DECR_REC_ACC_TKN_NOT_PRSNT);
+			throw new IOException(EncryptionConstants.UNABLE_DECRYPT);
+		}
+	}
+
+	/**
+	 * Method Name: generateSenderTokenHash Method to generate sender token hash for
+	 * temporary request sent to EDMS.
+	 * 
+	 * @param receiverAccessToken
+	 * @return String of generateSenderTokenHash
+	 */
+	public String generateSenderTokenHash(String receiverAccessToken) {
+		String thisMethod = EncryptionConstants.GEN_SENDER_TOKEN_HASH;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		MessageDigest messageDigest = null;
+		byte[] encodedSenderTokenHash = null;
+		String senderTokenHash = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.MSG_DIGEST_PRSNT);
+			messageDigest = MessageDigest.getInstance(Constants.SHA);
+		} catch (NoSuchAlgorithmException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.MSG_DIGEST_NOT_PRSNT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.MSG_DIGEST_NOT_PRSNT + ExceptionUtils.getStackTrace(e));
+		}
+		if (messageDigest != null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.MSG_DIGEST_PRSNT);
+			encodedSenderTokenHash = messageDigest.digest(receiverAccessToken.getBytes(StandardCharsets.UTF_8));
+			if (encodedSenderTokenHash != null) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EncryptionConstants.ENC_SNDR_TKN_HASH);
+				senderTokenHash = bytesToHex(encodedSenderTokenHash);
+			} else {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EncryptionConstants.ENC_SNDR_TKN_HASH_NOT_PRSNT);
+			}
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.MSG_DIGEST_NOT_PRSNT);
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return senderTokenHash;
+	}
+
+	/**
+	 * Method Name : bytesToHex Method to generate String value from byte[].
+	 * 
+	 * @param bytes
+	 * @return String converted value.
+	 */
+	private String bytesToHex(byte[] bytes) {
+		String thisMethod = EncryptionConstants.BYTE_HEX;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		StringBuilder hexString = new StringBuilder(EncryptionConstants.BYTE_HEX_MULT * bytes.length);
+		for (byte b : bytes) {
+			String hex = Integer.toHexString(0xff & b);
+			if (hex.length() == EncryptionConstants.INTONE) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EncryptionConstants.HEX_PRSNT);
+				hexString.append('0');
+			}
+			hexString.append(hex);
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return hexString.toString();
+	}
+
+	/**
+	 * Method Name : verifyReceiverTokenHash Method to verify signed receiver token
+	 * hash sent by EDMS using SHA256withRSA Signature.
+	 * 
+	 * @param edmsServerPublicKey
+	 * @param signedReceiverTokenHash
+	 * @param senderTokenHash
+	 * @return boolean value to confirm the verification
+	 */
+	public boolean verifyReceiverTokenHash(PublicKey edmsServerPublicKey, String signedReceiverTokenHash,
+			String senderTokenHash) {
+		String thisMethod = EncryptionConstants.VERIFY_RECIVER_TOKEN;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		boolean hashMatched = false;
+
+		Signature publicSignature = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.PUBLIC_SIGN_PRSNT);
+			publicSignature = Signature.getInstance(Constants.PUBLIC_SIGNATURE);
+		} catch (NoSuchAlgorithmException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.PUBLIC_SIGN_NOT_PRSNT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.PUBLIC_SIGN_NOT_PRSNT + ExceptionUtils.getStackTrace(e));
+		}
+		if (publicSignature != null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.VALID_KEY_EXPN);
+			try {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EncryptionConstants.PUBLIC_SIGN_VERYFY_PRSNT);
+				publicSignature.initVerify(edmsServerPublicKey);
+			} catch (InvalidKeyException e) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EncryptionConstants.PUBLIC_SIGN_VERYFY_NOT_PRSNT);
+				FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EncryptionConstants.PUBLIC_SIGN_VERYFY_NOT_PRSNT + ExceptionUtils.getStackTrace(e));
+			}
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EncryptionConstants.INVLD_KEY_EXP);
+		}
+		if (publicSignature != null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.PUBLIC_SIGN_PRSNT);
+			try {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EncryptionConstants.PUBLIC_SIGN_PRSNT);
+				publicSignature.update(senderTokenHash.getBytes(StandardCharsets.UTF_8));
+			} catch (SignatureException e) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EncryptionConstants.PUBLIC_SIGN_NOT_PRSNT);
+				FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EncryptionConstants.PUBLIC_SIGN_NOT_PRSNT + ExceptionUtils.getStackTrace(e));
+
+			}
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.PUBLIC_SIGN_NOT_PRSNT);
+		}
+		byte[] signatureBytes = Base64.decodeBase64(signedReceiverTokenHash);
+		if (publicSignature != null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.PUBLIC_SIGN_PRSNT);
+			try {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EncryptionConstants.PUBLIC_SIGN_HASH_PRSNT);
+				hashMatched = publicSignature.verify(signatureBytes);
+			} catch (SignatureException e) {
+				FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EncryptionConstants.PUBLIC_SIGN_HASH_NOT_PRSNT);
+				FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+						EncryptionConstants.PUBLIC_SIGN_HASH_NOT_PRSNT + ExceptionUtils.getStackTrace(e));
+			}
+		} else {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.PUBLIC_SIGN_NOT_PRSNT);
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return hashMatched;
+	}
+
+	/**
+	 * Method Name : signSenderTokenHash Method to generate Base64 encoded sender
+	 * token hash sent to EDMS in f al request.
+	 * 
+	 * @param privateKey
+	 * @param senderTokenHash
+	 * @return String
+	 * @throws NoSuchAlgorithmException
+	 * @throws SignatureException
+	 */
+	public String signSenderTokenHash(PrivateKey privateKey, String senderTokenHash)
+			throws NoSuchAlgorithmException, SignatureException {
+		String thisMethod = EncryptionConstants.SIGN_SNDR_TOKEN_HASH;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.PRIVATE_SIGN_PRSNT);
+			Signature privateSignature = Signature.getInstance(Constants.PUBLIC_SIGNATURE);
+			privateSignature.initSign(privateKey);
+			privateSignature.update(senderTokenHash.getBytes(StandardCharsets.UTF_8));
+			byte[] signature = privateSignature.sign();
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+			return Base64.encodeBase64String(signature);
+		} catch (InvalidKeyException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.PRIVATE_SIGN_NOT_PRSNT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.PRIVATE_SIGN_NOT_PRSNT + ExceptionUtils.getStackTrace(e));
+			return null;
+		}
+	}
+
+	/**
+	 * Method Name : decryptResponse Method to decrypt the cipher text using a
+	 * hybrid crypto-system which uses GCM to encrypt the rawJSON and OAEP to
+	 * encrypt the AES key. All the default parameter choices are used for OAEP and
+	 * GCM using SHA-256 and MFG1 Padding.
+	 * 
+	 * @param encryptedResponse
+	 * @param privateKey
+	 * @return String
+	 * @throws IOException
+	 */
+	public String decryptResponse(String encryptedResponse, PrivateKey privateKey) throws IOException {
+		String thisMethod = EncryptionConstants.DCRYPT_RESP;
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_STARTED);
+		Cipher oaep = null;
+		OAEPParameterSpec oaepParameterSpec = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EncryptionConstants.OEAP_PRESENT);
+			oaep = Cipher.getInstance(Constants.RSA);
+			oaepParameterSpec = new OAEPParameterSpec(Constants.SHA, "MGF1", MGF1ParameterSpec.SHA256,
+					PSpecified.DEFAULT);
+		} catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.OEAP_NOT_PRSNT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.OEAP_NOT_PRSNT + ExceptionUtils.getStackTrace(e));
+			throw new IOException(Constants.RUNTIME_D, e);
+		}
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.OEAP_INIT_PRSNT);
+			oaep.init(Cipher.UNWRAP_MODE, privateKey, oaepParameterSpec);
+		} catch (InvalidAlgorithmParameterException | InvalidKeyException e1) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.OEAP_INIT_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.OEAP_INIT_NOT_PRESENT + ExceptionUtils.getStackTrace(e1));
+		}
+		byte[] encryptedBytes = null;
+		if (encryptedResponse == null) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.ENCRYPT_RSP_NULL);
+			return null;
+		}
+		encryptedBytes = Base64.decodeBase64(encryptedResponse.getBytes(StandardCharsets.UTF_8));
+		ByteBuffer ciphertextBuffer = ByteBuffer.wrap(encryptedBytes);
+		if (ciphertextBuffer.remaining() < 2) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.CIPHER_TXT_BUFFER_PRSNT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.CIPHER_TXT_BUFFER_NOT_PRSNT);
+			throw new IllegalArgumentException(Constants.INVALIDCIPHERTEXT);
+		}
+		int wrappedKeySize = ciphertextBuffer.getShort() & 0xFFFF;
+		if (ciphertextBuffer.remaining() < wrappedKeySize + 128 / Byte.SIZE) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.CIPHER_TXT_BUFFER_RMG_PRSNT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.CIPHER_TXT_BUFFER_RMG_NOT_PRSNT);
+			throw new IllegalArgumentException(Constants.INVALIDCIPHERTEXT);
+		}
+		byte[] wrappedKey = new byte[wrappedKeySize];
+		ciphertextBuffer.get(wrappedKey);
+		SecretKey aesKey = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EncryptionConstants.ASE_KEY_PRSNT);
+			aesKey = (SecretKey) oaep.unwrap(wrappedKey, "AES", Cipher.SECRET_KEY);
+		} catch (NoSuchAlgorithmException | InvalidKeyException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.ASE_KEY_NOT_PRSNT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.ASE_KEY_NOT_PRSNT + ExceptionUtils.getStackTrace(e));
+			throw new IOException(Constants.RUNTIME_D, e);
+		}
+		Cipher aesGCM = null;
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.ASEGCM_PRESENT);
+			aesGCM = Cipher.getInstance(Constants.AES_GCM);
+
+			GCMParameterSpec staticParameterSpec = new GCMParameterSpec(128, new byte[12]);
+
+			aesGCM.init(2, aesKey, staticParameterSpec);
+		} catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidAlgorithmParameterException
+				| InvalidKeyException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.ASEGCM_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.ASEGCM_NOT_PRESENT + ExceptionUtils.getStackTrace(e));
+			throw new IOException(Constants.RUNTIME_D, e);
+		}
+		ByteBuffer rawJSONBuffer = ByteBuffer.allocate(aesGCM.getOutputSize(ciphertextBuffer.remaining()));
+		try {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, EncryptionConstants.ASEGCM_DOFINAL_PRESENT);
+			aesGCM.doFinal(ciphertextBuffer, rawJSONBuffer);
+		} catch (ShortBufferException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.SHORT_BUFFER_NOT_PRSNT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.SHORT_BUFFER_NOT_PRSNT + ExceptionUtils.getStackTrace(e));
+			throw new IOException(Constants.SHORT_BUFFER);
+		} catch (IllegalBlockSizeException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.ILLEGAL_BLOCK_NOT_PRSNT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.ILLEGAL_BLOCK_NOT_PRSNT + ExceptionUtils.getStackTrace(e));
+			throw new IOException(Constants.ILLEGALEX);
+		} catch (BadPaddingException e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.BAD_PADDING_NOT_PRSNT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.BAD_PADDING_NOT_PRSNT + ExceptionUtils.getStackTrace(e));
+			throw new IOException(Constants.BADPADDING);
+		} catch (Exception e) {
+			FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.EXP_ASEGCM_NOT_PRESENT);
+			FLogger.error(Constants.TIER_NAME, this.getClass().getName(), thisMethod,
+					EncryptionConstants.EXP_ASEGCM_NOT_PRESENT + ExceptionUtils.getStackTrace(e));
+			throw new IOException(Constants.INVALIDCIPHERTEXT);
+		}
+		FLogger.info(Constants.TIER_NAME, this.getClass().getName(), thisMethod, Constants.METHOD_END);
+		return new String(rawJSONBuffer.array(), StandardCharsets.UTF_8);
+	}
+}
+package com.sbi.yono.document.savingsaccount.edms.encryption;
+
+public class EncryptionConstants {
+
+	public static final int LENGTH = 16;
+	public static final int OEAP_BYTE_SIZE  = 128;
+	public static final int BYTE_HEX_MULT  = 2;
+	public static final int INTONE  = 1;
+	
+	
+	public static final String GENERATEUNIQUESERVERID = "generateUniqueServerId";
+	public static final String GENERATEASEKEY = "generateAESkey";
+	public static final String ENCRYPTION_RAW_JSON = "encryptRawJSON";
+	public static final String DEC_RECIVER_ACCESS_TOKEN = "decReceiverAccessToken";
+	public static final String GEN_SENDER_TOKEN_HASH = "generateSenderTokenHash";
+	public static final String BYTE_HEX = "bytesToHex";
+	public static final String VERIFY_RECIVER_TOKEN = "verifyReceiverTokenHash";
+	public static final String SIGN_SNDR_TOKEN_HASH = "signSenderTokenHash";
+	public static final String DCRYPT_RESP = "decryptResponse";
+	
+	
+	public static final String INTO_TRY_GENERATEASEKEY = "Into the try of generateAESkey";
+	public static final String UNABLE_TO_UPLOAD_USER = "Unable to upload for user ";
+	public static final String INTO_TRY_ENCRYPTION_RAW_JSON = "Into the try of encryptRawJSON";
+	public static final String CIPHER_RSA = "Cipher RSA";
+	public static final String OEAP_PARAMETER_SPEC_NULL = "oaep Parameter Spec is null and not present ";
+	public static final String OEAP_NOT_INITIALIZE = "oaep not intialize ";
+	public static final String WRAP_KEY_NOT_PRESENT = "wrap Key not present";
+	public static final String ASEGCM_PRESENT = "aesGCM present.";
+	public static final String ASEGCM_NOT_PRESENT = "aesGCM not present.";
+	public static final String GCM_PARAM_SPEC_NOT_PRESENT = "GCMParameterSpec not present ";
+	public static final String WRAPPED_KEY_NOT_PRESENT = "wrappedKey not present.";
+	public static final String ASEGCM_DOFINAL_PRESENT = "aesGCM doFinal present.";
+	public static final String ASEGCM_DOFINAL_NOT_PRESENT = "aesGCM do final not present ";
+	public static final String OEAP_PRESENT = "oaep present ";
+	public static final String OEAP_INIT_NOT_PRESENT = "oaep init not present ";
+	public static final String DECR_REC_ACC_TKN_PRSNT = "decReceiverAccessTokenBytes present ";
+	public static final String DECR_REC_ACC_TKN_NOT_PRSNT = "decReceiverAccessTokenBytes not present ";
+	public static final String UNABLE_DECRYPT = "unable to decrypt";
+	public static final String MSG_DIGEST_PRSNT = "messageDigest present ";
+	public static final String MSG_DIGEST_NOT_PRSNT = "messageDigest not present ";
+	public static final String ENC_SNDR_TKN_HASH = "encodedSenderTokenHash present";
+	public static final String ENC_SNDR_TKN_HASH_NOT_PRSNT = "encodedSenderTokenHash not present";
+	public static final String HEX_PRSNT = "hexString present";
+	public static final String PUBLIC_SIGN_PRSNT = "publicSignature present";
+	public static final String PUBLIC_SIGN_NOT_PRSNT = "publicSignature not present ";
+	public static final String VALID_KEY_EXPN = "ValidKeyException";
+	public static final String PUBLIC_SIGN_VERYFY_PRSNT = "publicSignature initVerify present";
+	public static final String PUBLIC_SIGN_VERYFY_NOT_PRSNT = "publicSignature initVerify not present ";
+	public static final String INVLD_KEY_EXP = "InvalidKeyException";
+	public static final String PUBLIC_SIGN_HASH_PRSNT = "publicSignature hashMatched present";
+	public static final String PUBLIC_SIGN_HASH_NOT_PRSNT = "publicSignature hashMatched not present";
+	public static final String PRIVATE_SIGN_PRSNT = "privateSignature present";
+	public static final String PRIVATE_SIGN_NOT_PRSNT = "privateSignature not present";
+	public static final String OEAP_NOT_PRSNT = "oaep not present ";
+	public static final String OEAP_INIT_PRSNT = "oaep init present ";
+	public static final String ENCRYPT_RSP_NULL = "encryptedResponse is null";
+	public static final String CIPHER_TXT_BUFFER_PRSNT = "ciphertextBuffer present";
+	public static final String CIPHER_TXT_BUFFER_NOT_PRSNT = "ciphertextBuffer not present";
+	public static final String CIPHER_TXT_BUFFER_RMG_PRSNT = "ciphertextBuffer remaining present";
+	public static final String CIPHER_TXT_BUFFER_RMG_NOT_PRSNT = "ciphertextBuffer remaining not present";
+	public static final String ASE_KEY_PRSNT = "aesKey present";
+	public static final String ASE_KEY_NOT_PRSNT = "aesKey not present";
+	public static final String SHORT_BUFFER_NOT_PRSNT =  "ShortBufferException aesGCM doFinal not present";
+	public static final String ILLEGAL_BLOCK_NOT_PRSNT = "IllegalBlockSizeException aesGCM doFinal not present";
+	public static final String BAD_PADDING_NOT_PRSNT = "BadPaddingException aesGCM doFinal not present";
+	public static final String EXP_ASEGCM_NOT_PRESENT = "Exception aesGCM doFinal not present";
+	
+	private EncryptionConstants() {
+	}
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+}
+package com.sbi.yono.document.savingsaccount.edms.encryption;
+
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+
+import org.apache.http.conn.ssl.DefaultHostnameVerifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.tcs.techbone.logger.FLogger;
+
+
+public class SSLUtil {
+	private static final String METHOD_STARTED = "Method Started";
+	private static final String METHOD_END = "Method end";
+	private static final String TIER_NAME = "Document";
+	private static final String CLASS_NAME = "SSLUtil.java";
+	static Logger logger = LoggerFactory.getLogger(SSLUtil.class);
+	static {
+		HttpsURLConnection.setDefaultHostnameVerifier(new DefaultHostnameVerifier());
+	}
+
+	private static final TrustManager[] UNQU_MANAGERS = new TrustManager[] { new X509TrustManager() {
+
+		
+@SuppressWarnings("all")
+		@Override
+		public void checkServerTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
+			
+		}
+@SuppressWarnings("all")
+		@Override
+		public void checkClientTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
+		
+		}
+@SuppressWarnings("all")
+		@Override
+		public X509Certificate[] getAcceptedIssuers() {
+		    return new X509Certificate[0];
+		}
+	}
+
+	};
+	@SuppressWarnings("all")
+	public static void turnOffSSLChecking() throws NoSuchAlgorithmException, KeyManagementException {
+		String thisMethod = "turnOffSSLChecking";
+		FLogger.info(TIER_NAME, CLASS_NAME, thisMethod,METHOD_STARTED);
+		final SSLContext sc = SSLContext.getInstance(Constants.TLSV1_2);
+		sc.init(null, UNQU_MANAGERS, null);
+		
+		HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+		FLogger.info(TIER_NAME, CLASS_NAME, thisMethod,METHOD_END);
+	}
+	@SuppressWarnings("all")
+	public static void turnOnSSLChecking() throws NoSuchAlgorithmException, KeyManagementException {
+		String thisMethod = "turnOffSSLChecking";
+		FLogger.info(TIER_NAME, CLASS_NAME, thisMethod,METHOD_STARTED);
+		SSLContext.getInstance(Constants.TLSV1_2).init(null, null, null);
+		FLogger.info(TIER_NAME, CLASS_NAME, thisMethod,METHOD_END);
+	}
+
+	private SSLUtil() {
+		throw new UnsupportedOperationException(Constants.DO_NOT_INSTINTITAE);
+	}
+
+}
+
+
+}
