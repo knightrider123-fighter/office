@@ -1,0 +1,586 @@
+package com.sbi.yono.document.savingsaccount.edms.uploaddoc;
+
+import java.awt.image.BufferedImage;
+import java.awt.image.RasterFormatException;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+import javax.imageio.ImageIO;
+
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.apache.tika.Tika;
+import org.springframework.stereotype.Service;
+
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.AccountOnbrdngStatusRepository;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.CustomerPdRepository;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.DocumentMasterRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsDocDetailsRepo;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.EdmsUploadDocRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.DcmntMstr;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetails;
+import com.sbi.yono.document.savingsaccount.edms.entity.EdmsDocDetailsComposite;
+import com.sbi.yono.document.savingsaccount.edms.utility.ConversionCode;
+import com.sbi.yono.document.savingsaccount.edms.utility.Document;
+import com.sbi.yono.document.savingsaccount.edms.utility.InputValidator;
+import com.tcs.techbone.exception.ServiceBusinessException;
+import com.tcs.techbone.logger.FLogger;
+
+import net.coobird.thumbnailator.Thumbnails;
+
+@Service
+public class UploadDocumentSvc {
+
+
+
+	String thisClass = UploadDocConstant.UPLOAD_DOCUMENT_SVC;
+	EdmsDocDetailsRepo edmsDocDetailsRepo;
+	final EdmsUploadDocRepo docRepoEdmsUploadDocRepo;
+	DocumentMasterRepo documentMasterRepo;
+	CustomerPdRepository customerPdRepository;
+	AccountOnbrdngStatusRepository accountOnbrdngStatusRepository;
+	ConversionCode baseSixtyFourCheck = new ConversionCode();
+
+	public UploadDocumentSvc(EdmsDocDetailsRepo edmsDocDetailsRepo, CustomerPdRepository customerPdRepository,
+			AccountOnbrdngStatusRepository accountOnbrdngStatusRepository, DocumentMasterRepo documentMasterRepo,
+			EdmsUploadDocRepo docRepoEdmsUploadDocRepo) {
+		this.docRepoEdmsUploadDocRepo = docRepoEdmsUploadDocRepo;
+		this.documentMasterRepo = documentMasterRepo;
+		this.edmsDocDetailsRepo = edmsDocDetailsRepo;
+		this.customerPdRepository = customerPdRepository;
+		this.accountOnbrdngStatusRepository = accountOnbrdngStatusRepository;
+	}
+
+	/**
+	 * Method name: captureSignature
+	 * 
+	 * @Description capture Signature from TNC Document
+	 * @param pdfPath
+	 * @param leadId
+	 * @param type
+	 * @param extension
+	 * @throws ServiceBusinessException
+	 */
+	public void captureSignature(String pdfPath, String leadId, String type, String extension)
+			throws ServiceBusinessException {
+		String thisMethod = UploadDocConstant.CAPTURESIGNATURE;
+		FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_STARTED);
+		File file = new File(pdfPath);
+		String absolutePath = file.getAbsolutePath();
+		absolutePath = absolutePath.replace(file.getName(), UploadDocConstant.EMPTY_STRING);
+
+		String outputPath = absolutePath + leadId + UploadDocConstant.LEAD_ID + UploadDocConstant.SIGNTNC + UploadDocConstant.JPEG;
+
+		String orignalfolder = UploadDocConstant.OPT + File.separator + UploadDocConstant.DOCUMENTS + File.separator + leadId
+				+ File.separator + UploadDocConstant.ORI + File.separator + leadId + UploadDocConstant.LEAD_ID + UploadDocConstant.TNC + extension;
+
+		try {
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.CAPTURING_SIGN_FROM_TNC_DOCUMENT);
+			File imageFile = new File(orignalfolder);
+			byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
+			BufferedImage originalImage = ImageIO.read(new ByteArrayInputStream(imageBytes));
+			int cropX = UploadDocConstant.CROP_X;
+			int cropY = UploadDocConstant.CROP_Y;
+			int cropWidth = UploadDocConstant.CROP_WIDTH;
+			int cropHeight = UploadDocConstant.CROP_HEIGHT;
+
+			BufferedImage croppedImage = originalImage.getSubimage(cropX, cropY, cropWidth, cropHeight);
+			File outputfile = new File(outputPath);
+			compress(croppedImage, outputfile);
+
+			savingCapturedSignToEdmsDocDetails(leadId, type, extension, thisMethod, absolutePath);
+
+		} catch (IOException | RasterFormatException e) {
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass,
+					UploadDocConstant.EXCEPTION_OCCURRED_WHILE_CAPTURING_SIGN_FROM_TNC);
+			ServiceBusinessException businessException = new ServiceBusinessException();
+			businessException.addBizError(GlobalException.REUPLOAD_FILE);
+			FLogger.error(UploadDocConstant.TIER_NAME, UploadDocumentSvc.class.getSimpleName(), thisMethod,
+					UploadDocConstant.EXCEPTION_OCCURRED + ExceptionUtils.getStackTrace(e));
+			throw businessException;
+		}
+		FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_END);
+	}
+
+	/**
+	 * Method name: savingCapturedSignToEdmsDocDetails
+	 * 
+	 * @Description Saves the captured signature details to the EDMS (Electronic
+	 *              Document Management System) document details.
+	 * 
+	 * @param leadId
+	 * @param type
+	 * @param extension
+	 * @param thisMethod
+	 * @param absolutePath
+	 */
+	private void savingCapturedSignToEdmsDocDetails(String leadId, String type, String extension, String thisMethod,
+			String absolutePath) {
+		FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_STARTED);
+		EdmsDocDetailsComposite composite = new EdmsDocDetailsComposite();
+		composite.setDocId(type);
+		composite.setRefNo(leadId);
+		Optional<EdmsDocDetails> edmsDocDetail = edmsDocDetailsRepo.findById(composite);
+		Optional<DcmntMstr> documentMasterDtls = documentMasterRepo.findById(type);
+		DcmntMstr dcmntMstr = null;
+		if (!documentMasterDtls.isEmpty()) {
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.DCMNT_MSTR_IS_PRESENT);
+			dcmntMstr = documentMasterDtls.get();
+
+			if (edmsDocDetail.isPresent()) {
+				FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.EDMS_DOC_DETAIL_IS_PRESENT);
+				EdmsDocDetails edmsDocDetailsTwo = edmsDocDetail.get();
+				edmsDocDetailsTwo.setFilePath(absolutePath);
+				edmsDocDetailsTwo.setFileName(leadId + UploadDocConstant.LEAD_ID + dcmntMstr.getFileName() + extension);
+				edmsDocDetailsTwo.setFilePath(UploadDocConstant.OPT + File.separator + UploadDocConstant.DOCUMENTS + File.separator
+						+ leadId + File.separator + leadId + UploadDocConstant.UNDER_SCORE + dcmntMstr.getFileName() + extension);
+				edmsDocDetailsRepo.save(edmsDocDetailsTwo);
+			}
+
+			else {
+				FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.EDMS_DOC_DETAIL_IS_ABSENT);
+				EdmsDocDetails edmsDocDetails = new EdmsDocDetails();
+				EdmsDocDetailsComposite edmsDtls = new EdmsDocDetailsComposite();
+				edmsDtls.setDocId(UploadDocConstant.IDTYPE_TWENTY_TWO);
+				edmsDtls.setRefNo(leadId);
+				edmsDocDetails.setCompositeKeys(edmsDtls);
+				edmsDocDetails.setDocCategory(dcmntMstr.getEdmsId());
+				edmsDocDetails.setDocCode(dcmntMstr.getEdmsId());
+				edmsDocDetails.setDocIdentifier(dcmntMstr.getEdmsId());
+				edmsDocDetails.setIdNo(UploadDocConstant.EMPTY_STRING);
+				edmsDocDetails.setCkycNumber(UploadDocConstant.VALUE_ZERO_LONG);
+				edmsDocDetails.setCersaiFlag(false);
+				edmsDocDetails.setArchivalFlag(true);
+				edmsDocDetails.setDocType(dcmntMstr.getEdmsId());
+				edmsDocDetails.setScannedDate(LocalDateTime.now());
+				edmsDocDetails.setDocExpiryDate(null);
+				edmsDocDetails.setComments(UploadDocConstant.EMPTY_STRING);
+				edmsDocDetails.setCrtdBy(UploadDocConstant.EMPTY_STRING);
+				edmsDocDetails.setUpdtBy(UploadDocConstant.EMPTY_STRING);
+				edmsDocDetails.setCrtdDt(LocalDateTime.now());
+				edmsDocDetails.setUpdtDt(LocalDateTime.now());
+				edmsDocDetails.setDocEdmsMap(dcmntMstr.getDocType());
+				edmsDocDetails.setUpdtBy(UploadDocConstant.SYSTEM);
+				edmsDocDetails.setCrtdBy(UploadDocConstant.SYSTEM);
+				edmsDocDetails.setFileName(leadId + UploadDocConstant.LEAD_ID + dcmntMstr.getFileName() + extension);
+				edmsDocDetails.setFilePath(UploadDocConstant.OPT + File.separator + UploadDocConstant.DOCUMENTS + File.separator
+						+ leadId + File.separator + leadId + UploadDocConstant.UNDER_SCORE + dcmntMstr.getFileName() + extension);
+				edmsDocDetailsRepo.save(edmsDocDetails);
+			}
+		}
+		FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_END);
+	}
+
+	/**
+	 * Method Name: compress
+	 * 
+	 * @Description This method Compress Document to given size
+	 * @param image
+	 * @param file
+	 * @throws ServiceBusinessException
+	 */
+	public static void compress(BufferedImage image, File file) throws ServiceBusinessException {
+
+		String thisMethod = UploadDocConstant.COMPRESS;
+		String thisClass = UploadDocConstant.UPLOAD_DOCUMENT_SVC;
+		FLogger.info(UploadDocConstant.TIER_NAME, thisClass, thisMethod, UploadDocConstant.METHOD_STARTED);
+		try {
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.COMPRESSING_THE_IMAGE);
+			long targetSizeBytes = UploadDocConstant.TARGET_SIZE_BYTES;
+			Thumbnails.of(image).size(UploadDocConstant.IMAGE_W, UploadDocConstant.IMAGE_H)
+
+					.outputQuality(UploadDocConstant.MAX_COMPRESSION_QUALITY).outputFormat(UploadDocConstant.JPEG_ONE).toFile(file);
+
+			long currentSize = file.length();
+			float compressionQuality = UploadDocConstant.MAX_COMPRESSION_QUALITY;
+			while (currentSize > targetSizeBytes && compressionQuality > UploadDocConstant.MIN_COMPRESSION_QUALITY) {
+
+				Thumbnails.of(image).size(UploadDocConstant.IMAGE_W, UploadDocConstant.IMAGE_H)
+
+						.outputQuality(compressionQuality).outputFormat(UploadDocConstant.JPEG_ONE).toFile(file);
+
+				currentSize = file.length();
+				compressionQuality -= UploadDocConstant.REDUCE_COMPRESSION_QUALITY;
+			}
+		} catch (IOException e) {
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.COMPRESSING_IMAGE_FAILED);
+			ServiceBusinessException businessException = new ServiceBusinessException();
+			businessException.addBizError(GlobalException.REUPLOAD_FILE);
+
+			FLogger.error(UploadDocConstant.TIER_NAME, UploadDocumentSvc.class.getSimpleName(), thisMethod,
+					UploadDocConstant.COMPRESSING_IMAGE_FAILED_FUCTION + ExceptionUtils.getStackTrace(e));
+			throw businessException;
+		}
+		FLogger.info(UploadDocConstant.TIER_NAME, thisClass, thisMethod, UploadDocConstant.METHOD_END);
+	}
+
+	/**
+	 * Method Name: documentUpload
+	 * 
+	 * @Description It upload documents to table
+	 * @param leadId
+	 * @param idType
+	 * @param fileName
+	 * @param extension
+	 * @param baseSixtyFourString
+	 * @return return status of Document Upload
+	 * @throws ServiceBusinessException
+	 */
+	public String documentUpload(String leadId, String idType, String fileName, String extension, String baseSixtyFourString)
+			throws ServiceBusinessException {
+		String thisMethod = UploadDocConstant.DOCUMENT_UPLOAD;
+		FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_STARTED);
+
+		inputValidator(leadId, idType, fileName, extension, baseSixtyFourString, thisMethod);
+
+		List<String> newList = null;
+		try {
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.INTO_TRY_CHECK_BASE_SIXTY_FOUR);
+			newList = baseSixtyFourCheck.checkBaseSixtyFour(baseSixtyFourString, extension);
+		} catch (IOException eOne) {
+
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.COMPRESSING_IMAGE_FAILED);
+			ServiceBusinessException businessException = new ServiceBusinessException();
+			businessException.addBizError(GlobalException.REUPLOAD_FILE);
+
+			FLogger.error(UploadDocConstant.TIER_NAME, UploadDocumentSvc.class.getSimpleName(), thisMethod,
+					UploadDocConstant.BASE_SIXTY_FOUR_ERROR + ExceptionUtils.getStackTrace(eOne));
+			throw businessException;
+		}
+		baseSixtyFourString = newList.get(UploadDocConstant.VALUE_ZERO);
+		extension = newList.get(UploadDocConstant.NUMERIC_VALUE_ONE);
+
+		Optional<DcmntMstr> documentMasterDtls = documentMasterRepo.findById(idType);
+		if (documentMasterDtls.isEmpty()) {
+			ServiceBusinessException businessException = new ServiceBusinessException();
+			businessException.addBizError(GlobalException.RESOURCE_NOT_FOUND);
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.FIND_BY_ID_IS_EMPTY);
+			FLogger.error(UploadDocConstant.TIER_NAME, UploadDocumentSvc.class.getSimpleName(), thisMethod,
+					UploadDocConstant.EXCEPTION_FIND_BY_ID_IS_EMPTY + ExceptionUtils.getStackTrace(businessException));
+			FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_END);
+			throw businessException;
+		}
+		DcmntMstr dcmntMstr = documentMasterDtls.get();
+		String status = "";
+		Document document = new Document();
+		FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.SAVING_THE_DOCUMENT);
+		int targetSize = dcmntMstr.getSize();
+		if (idType.equals(UploadDocConstant.IDTYPE_TWENTY_FOUR) && (extension.equals(UploadDocConstant.JPEG))) {
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass,
+					UploadDocConstant.ID_TYPE_DC_TWENTY_FOUR_AND_EXTENSION_JPEG_SPECIAL_CASE_FOR_OVD);
+			targetSize =UploadDocConstant.NUMERIC_CONSTANT_ONE_THIRTY_FIVE;
+		}
+		status = document.saveDocument(baseSixtyFourString, leadId + UploadDocConstant.LEAD_ID + dcmntMstr.getFileName() + extension,
+				leadId, targetSize);
+
+		if (status.equals(UploadDocConstant.SUCCESS)) {
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.DOCUMENT_SAVED_SUCCESSFULLY);
+
+			if (idType.equals(UploadDocConstant.TNC_TYPE)) {
+				FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.UPLOADED_DOCUMENT_IS_TNC);
+				String mainfolder = UploadDocConstant.OPT + File.separator + UploadDocConstant.DOCUMENTS + File.separator + leadId
+						+ File.separator + leadId + UploadDocConstant.LEAD_ID + dcmntMstr.getFileName() + extension;
+				String orignalfolder = UploadDocConstant.OPT + File.separator + UploadDocConstant.DOCUMENTS + File.separator + leadId
+						+ File.separator + UploadDocConstant.ORI + File.separator + leadId + UploadDocConstant.LEAD_ID + dcmntMstr.getFileName()
+						+ extension;
+				if (extension.equals(UploadDocConstant.JPG_ONE) || extension.equals(UploadDocConstant.JPEG)
+						|| extension.equals(UploadDocConstant.PNG)) {
+					FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.TNC_DOCUMENT_IS_IN_IMAGE_FORMAT);
+					captureSignature(orignalfolder, leadId, UploadDocConstant.IDTYPE_TWENTY_TWO, extension);
+					captureSignature(mainfolder, leadId, UploadDocConstant.IDTYPE_TWENTY_TWO, extension);
+				} else {
+					ServiceBusinessException businessException = new ServiceBusinessException();
+					FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.TNC_DOCUMENT_IS_IN_PDF_FORMAT);
+					businessException.addBizError(GlobalException.REUPLOAD_FILE);
+					FLogger.error(UploadDocConstant.TIER_NAME, UploadDocumentSvc.class.getSimpleName(), thisMethod,
+							UploadDocConstant.EXCEPTION_TNC_DOCUMENT_IS_IN_PDF_FORMAT
+									+ ExceptionUtils.getStackTrace(businessException));
+					FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_END);
+					throw businessException;
+				}
+			}
+			ServiceBusinessException businessException = new ServiceBusinessException();
+			savingToEdmsDocDetails(leadId, idType, extension, thisMethod, businessException);
+		}
+		FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_END);
+		return status;
+
+	}
+
+	/**
+	 * Method Name: inputValidator Validated the leadid, Idtype (Doc Id),extension,
+	 * tika
+	 * 
+	 * @param leadId
+	 * @param idType
+	 * @param fileName
+	 * @param extension
+	 * @param baseSixtyFourString
+	 * @param thisMethod
+	 * @throws ServiceBusinessException
+	 */
+	private void inputValidator(String leadId, String idType, String fileName, String extension, String baseSixtyFourString,
+			String thisMethod) throws ServiceBusinessException {
+		InputValidator inval = new InputValidator();
+
+		if (!inval.isValidIdType(idType)) {
+			ServiceBusinessException businessException = new ServiceBusinessException();
+			businessException.addBizError(GlobalException.INPUTVALIDATION, UploadDocConstant.IDTYPE);
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.RECEIVED_ID_TYPE_IS_INVALID);
+			FLogger.error(UploadDocConstant.TIER_NAME, UploadDocumentSvc.class.getSimpleName(), thisMethod,
+					UploadDocConstant.EXCEPTION_RECEIVED_ID_TYPE_IS_INVALID + ExceptionUtils.getStackTrace(businessException));
+			FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_END);
+			throw businessException;
+		}
+
+		if (fileName == null || fileName.isEmpty()) {
+			ServiceBusinessException businessException = new ServiceBusinessException();
+			businessException.addBizError(GlobalException.INPUTVALIDATION, UploadDocConstant.FILENAME);
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.RECEIVED_FILE_NAME_IS_INVALID);
+			FLogger.error(UploadDocConstant.TIER_NAME, UploadDocumentSvc.class.getSimpleName(), thisMethod,
+					UploadDocConstant.EXCEPTION_RECEIVED_FILE_NAME_IS_INVALID + ExceptionUtils.getStackTrace(businessException));
+			FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_END);
+			throw businessException;
+		}
+
+		if (leadId.length() == UploadDocConstant.LEAD_ID_LENGTH) {
+			ServiceBusinessException businessException = new ServiceBusinessException();
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.LEAD_ID_OF_TWENTY_EIGHT_LENGTH);
+			if (!inval.refValidator(leadId)) {
+				businessException.addBizError(GlobalException.INPUTVALIDATION, UploadDocConstant.LEADID);
+				FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass,UploadDocConstant. RECEIVED_LEAD_ID_TWENTY_EIGHT_LENGTH_IS_INVALID);
+				FLogger.error(UploadDocConstant.TIER_NAME, UploadDocumentSvc.class.getSimpleName(), thisMethod,
+						UploadDocConstant.EXCEPTION_RECEIVED_TWNETY_EIGHT_LENGTH_LEAD_ID_IS_INVALID
+								+ ExceptionUtils.getStackTrace(businessException));
+				FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_END);
+				throw businessException;
+			}
+		} else {
+			ServiceBusinessException businessException = new ServiceBusinessException();
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.LEAD_ID_OF_OTHER_LENGTH);
+			if (!inval.refvalidatorTwentyFive(leadId)) {
+				businessException.addBizError(GlobalException.INPUTVALIDATION, UploadDocConstant.LEADID);
+				FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.RECEIVED_LEAD_ID_IS_INVALID);
+				FLogger.error(UploadDocConstant.TIER_NAME, UploadDocumentSvc.class.getSimpleName(), thisMethod,
+						UploadDocConstant.EXCEPTION_RECEIVED_LEAD_ID_IS_INVALID + ExceptionUtils.getStackTrace(businessException));
+				FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_END);
+				throw businessException;
+			}
+		}
+
+		if (!inval.isValidFileExtension(extension)) {
+			ServiceBusinessException businessException = new ServiceBusinessException();
+			businessException.addBizError(GlobalException.INPUTVALIDATION, UploadDocConstant.EXTENSION);
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.EXTENSION_TYPE_VALIDATION);
+
+			FLogger.error(UploadDocConstant.TIER_NAME, UploadDocumentSvc.class.getSimpleName(), thisMethod,
+					UploadDocConstant.EXCEPTION_EXTENSION_TYPE_VALIDATION + ExceptionUtils.getStackTrace(businessException));
+			FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_END);
+			throw businessException;
+		}
+
+		Tika tika = new Tika();
+		String detect = tika.detect(Base64.decodeBase64(baseSixtyFourString.getBytes()));
+		if (!detect.contains(extension.substring(UploadDocConstant.NUMERIC_VALUE_ONE))) {
+			ServiceBusinessException businessException = new ServiceBusinessException();
+			businessException.addBizError(GlobalException.INVALID_MIME);
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass,
+					UploadDocConstant.BASE_SIXTY_FOUR_EXTENSION_IS_DIFFERENT_FROM_GIVEN_EXTENSION);
+			FLogger.error(UploadDocConstant.TIER_NAME, UploadDocumentSvc.class.getSimpleName(), thisMethod,
+					UploadDocConstant.EXCEPTION_BASE_SIXTY_FOUR_EXTENSION_IS_DIFFERENT_FROM_GIVEN_EXTENSION
+							+ ExceptionUtils.getStackTrace(businessException));
+			FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_END);
+			throw businessException;
+		}
+	}
+
+	/**
+	 * Method Name : savingToEdmsDocDetails
+	 * 
+	 * @Description Add value to DB EDMS
+	 * @param leadId
+	 * @param idType
+	 * @param extension
+	 * @param thisMethod
+	 * @param businessException
+	 * @throws ServiceBusinessException
+	 */
+	private void savingToEdmsDocDetails(String leadId, String idType, String extension, String thisMethod,
+			ServiceBusinessException businessException) throws ServiceBusinessException {
+		FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_STARTED);
+		EdmsDocDetailsComposite composite = new EdmsDocDetailsComposite();
+		composite.setDocId(idType);
+		composite.setRefNo(leadId);
+		Optional<DcmntMstr> documentMasterInfo = documentMasterRepo.findById(idType);
+		if (documentMasterInfo.isEmpty()) {
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass, UploadDocConstant.DETAILS_NOT_FOUND_BY_ID_TYPE);
+			businessException.addBizError(GlobalException.RESOURCE_NOT_FOUND);
+			FLogger.error(UploadDocConstant.TIER_NAME, UploadDocumentSvc.class.getSimpleName(), thisMethod,
+					UploadDocConstant.EXCEPTION_DETAILS_NOT_FOUND_BY_ID_TYPE + ExceptionUtils.getStackTrace(businessException));
+			throw businessException;
+		}
+		DcmntMstr dcmntMstr = documentMasterInfo.get();
+		Optional<EdmsDocDetails> edmsDocDetail = edmsDocDetailsRepo.findById(composite);
+		if (edmsDocDetail.isPresent()) {
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass,
+					UploadDocConstant.EDMS_DOC_DETAILS_ARE_ALREADY_PRESENT_FOR_THIS_LEAD_ID_ID_TYPE);
+			EdmsDocDetails edmsDocDetailsTwo = edmsDocDetail.get();
+			edmsDocDetailsTwo.setFileName(leadId + UploadDocConstant.LEAD_ID + dcmntMstr.getFileName() + extension);
+			edmsDocDetailsTwo.setUpdtDt(LocalDateTime.now());
+			edmsDocDetailsTwo.setFilePath(UploadDocConstant.OPT + File.separator + UploadDocConstant.DOCUMENTS + File.separator + leadId
+					+ File.separator + leadId + UploadDocConstant.LEAD_ID + dcmntMstr.getFileName() + extension);
+			edmsDocDetailsRepo.save(edmsDocDetailsTwo);
+		} else {
+			FLogger.info(UploadDocConstant.TIER_NAME, thisMethod, thisClass,
+					UploadDocConstant.EDMS_DOC_DETAILS_ARE_NOT_PRESENT_FOR_THIS_LEAD_ID_ID_TYPE);
+			EdmsDocDetails edmsDocDetails = new EdmsDocDetails();
+			EdmsDocDetailsComposite edmsDtls = new EdmsDocDetailsComposite();
+			edmsDtls.setDocId(idType);
+			edmsDtls.setRefNo(leadId);
+
+			edmsDocDetails.setCompositeKeys(edmsDtls);
+			edmsDocDetails.setDocCategory(dcmntMstr.getEdmsId());
+			edmsDocDetails.setDocCode(dcmntMstr.getEdmsId());
+			edmsDocDetails.setDocIdentifier(dcmntMstr.getEdmsId());
+			edmsDocDetails.setDocEdmsMap(dcmntMstr.getDocType());
+			edmsDocDetails.setFileName(leadId + UploadDocConstant.LEAD_ID + dcmntMstr.getFileName() + extension);
+			edmsDocDetails.setIdNo(UploadDocConstant.EMPTY_STRING);
+			edmsDocDetails.setCkycNumber(UploadDocConstant.VALUE_ZERO_LONG);
+			edmsDocDetails.setCersaiFlag(false);
+			edmsDocDetails.setArchivalFlag(true);
+			edmsDocDetails.setDocType(dcmntMstr.getEdmsId());
+			edmsDocDetails.setScannedDate(LocalDateTime.now());
+			edmsDocDetails.setDocExpiryDate(null);
+			edmsDocDetails.setComments(UploadDocConstant.EMPTY_STRING);
+			edmsDocDetails.setUpdtBy(UploadDocConstant.EMPTY_STRING);
+			edmsDocDetails.setCrtdBy(UploadDocConstant.EMPTY_STRING);
+			edmsDocDetails.setCrtdDt(LocalDateTime.now());
+			edmsDocDetails.setUpdtDt(LocalDateTime.now());
+			edmsDocDetails.setFilePath(UploadDocConstant.OPT + File.separator + UploadDocConstant.DOCUMENTS + File.separator + leadId
+					+ File.separator + leadId + UploadDocConstant.LEAD_ID + dcmntMstr.getFileName() + extension);
+			edmsDocDetails.setUpdtBy(UploadDocConstant.SYSTEM);
+			edmsDocDetails.setCrtdBy(UploadDocConstant.SYSTEM);
+			edmsDocDetails.setDocEdmsMap(dcmntMstr.getDocType());
+
+			edmsDocDetailsRepo.save(edmsDocDetails);
+
+		}
+		FLogger.info(UploadDocConstant.TIER_NAME, this.getClass().getName(), thisMethod, UploadDocConstant.METHOD_END);
+	}
+
+}
+
+
+package com.sbi.yono.document.savingsaccount.edms.utility;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.apache.tika.Tika;
+import org.springframework.stereotype.Component;
+
+import com.sbi.yono.document.savingsaccount.edms.uploaddoc.GlobalException;
+import com.tcs.techbone.exception.ServiceBusinessException;
+import com.tcs.techbone.logger.FLogger;
+
+@Component
+public class Document {
+
+	String thisClass = UtilityConstant.DOCUMENT;
+	/**
+	 * method : savedocument
+	 * @Description : save document of a specific type for a given lead.
+	 * @param document The document content to be saved.
+	 * @param docType  The type of the document.
+	 * @param leadId   The ID of the lead associated with the document
+	 * @param targetSize   Compress Size for file which to write on server
+	 * @return A message indicating the result of the document saving process ("Success" or "Failed to upload").
+	 * @throws ServiceBusinessException If the document type is not supported or if an error occurs during the save operation.
+	 */
+	
+	public String saveDocument(String document, String docType, String leadId, int targetSize)
+	        throws ServiceBusinessException {
+		String thisMethod = UtilityConstant.DOCUMENT_THIS_METHOD;
+	    FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod, UtilityConstant.METHOD_STARTED);
+		String folderPath = UtilityConstant.OPT + File.separator + UtilityConstant.DOCUMENT + File.separator + leadId;
+
+		String folderPathOrignal = folderPath + File.separator + UtilityConstant.ORI_FOLDER_NAME;
+
+	    Tika tika = new Tika();
+	    String detect = tika.detect(Base64.decodeBase64(document.getBytes()));
+
+	    if (detect.contains(UtilityConstant.PDF) || detect.contains(UtilityConstant.IMAGE_JPG)
+	            || detect.contains(UtilityConstant.IMAGE_PNG) || detect.contains(UtilityConstant.IMAGE_JPEG)) {
+			FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod, UtilityConstant.EXTESNION_CHECK);
+
+	        File folderOrignal = new File(folderPathOrignal);
+	        if (!folderOrignal.exists()) {
+				FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisClass, UtilityConstant.FOLDER_NOT_EXIST);
+	            boolean mkdirs = folderOrignal.mkdirs();
+	            if (!mkdirs) {
+					FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisClass, UtilityConstant.FOLDER_CREATION_FAIL);
+	        		FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod, UtilityConstant.METHOD_END);
+	                return UtilityConstant.UPLOAD_FAILED;
+	            }
+	        }
+	        File folder = new File(folderPath);
+	        if (!folder.exists()) {
+				FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisClass, UtilityConstant.FOLDER_NOT_EXIST);
+	            boolean mkdirs = folder.mkdirs();
+	            if (!mkdirs) {
+					FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisClass, UtilityConstant.FOLDER_CREATION_FAIL);
+	        		FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod, UtilityConstant.METHOD_END);
+					return UtilityConstant.UPLOAD_FAILED;
+	            }
+	        }
+
+	        try (OutputStream streamOrignal = new FileOutputStream(folderPathOrignal + File.separator + docType)) {
+				FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod, UtilityConstant.OUTPUT_STREAM);
+	            byte[] data = Base64.decodeBase64(document);
+	            streamOrignal.write(data);
+	        } catch (IOException e) {
+				FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisClass, UtilityConstant.FAILURE_IN_SAVING);
+	            ServiceBusinessException businessException = new ServiceBusinessException();
+				businessException.addBizError(GlobalException.READ_WRITE_ERROR);
+				FLogger.error(UtilityConstant.TIER_NAME, Document.class.getSimpleName(), thisMethod,UtilityConstant.EXCEPTION_OCCURRED + ExceptionUtils.getStackTrace(e));
+	    		FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod, UtilityConstant.METHOD_END);
+	            throw businessException;
+	        }
+
+	        CallCompression callCompression = new CallCompression();
+	        String compressedDoc = callCompression.getCompression(document, docType, targetSize);
+
+	        try (OutputStream stream = new FileOutputStream(folderPath + File.separator + docType)) {
+				FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod, UtilityConstant.COMPRESS_FILE_STREAM);
+	            byte[] data = Base64.decodeBase64(compressedDoc);
+	            stream.write(data);
+	            FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod, UtilityConstant.METHOD_END);
+	            return UtilityConstant.SUCCESS;
+	        } catch (IOException e) {
+				FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisClass, UtilityConstant.FAILURE_IN_SAVING);
+	            ServiceBusinessException businessException = new ServiceBusinessException();
+				businessException.addBizError(GlobalException.READ_WRITE_ERROR);
+				FLogger.error(UtilityConstant.TIER_NAME, Document.class.getSimpleName(), thisMethod,UtilityConstant.EXCEPTION_OCCURRED + ExceptionUtils.getStackTrace(e));
+	    		FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod, UtilityConstant.METHOD_END);
+	            throw businessException;
+	        }
+
+	    } else {
+			FLogger.info(UtilityConstant.TIER_NAME, thisMethod, thisClass, UtilityConstant.NOT_MATCHING_EXTENSION);
+	        ServiceBusinessException businessException = new ServiceBusinessException();
+	        businessException.addBizError(GlobalException.FILE_NOT_SUPPORTED);
+			FLogger.info(UtilityConstant.TIER_NAME, this.getClass().getName(), thisMethod, UtilityConstant.METHOD_END);
+	        throw businessException;
+	    }
+	}
+
+}
