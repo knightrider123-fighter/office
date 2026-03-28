@@ -584,3 +584,37 @@ public class Document {
 	}
 
 }
+
+
+import java.io.IOException;
+import java.nio.file.*;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Set;
+
+public class PermissionUtil {
+
+    public static void set777Recursively(Path path) {
+        try {
+            Set<PosixFilePermission> perms =
+                    PosixFilePermissions.fromString("rwxrwxrwx");
+
+            // Loop from root → to final path
+            Path current = path.getRoot();
+
+            for (Path part : path) {
+                current = (current == null) ? part : current.resolve(part);
+
+                if (Files.exists(current)) {
+                    Files.setPosixFilePermissions(current, perms);
+                }
+            }
+
+        } catch (UnsupportedOperationException e) {
+            System.out.println("POSIX not supported (Windows)");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
