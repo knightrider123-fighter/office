@@ -1,0 +1,132 @@
+
+	public static String saveBase64ToFile(String destinationPath) throws IOException, IllegalArgumentException {
+		String thisMethod = "saveBase64ToFile";
+		FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+				UploadDocConstant.METHOD_STARTED);
+
+		Path path = Paths.get(destinationPath);
+
+		Path parentDir = path.getParent();
+		if (parentDir != null && !Files.exists(parentDir)) {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"parentDir is null or file  Files.exists(parentDir)");
+			Files.createDirectories(parentDir);
+
+		}
+
+		String canonicalPath = path.toFile().getCanonicalPath();
+		Path canonicalTargetPath = Paths.get(canonicalPath);
+
+		byte[] decodedBytes;
+		try {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"In try block for byte[] decodedBytes ");
+			decodedBytes = Base64.getDecoder().decode(BASE64DATA);
+		} catch (IllegalArgumentException e) {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"In catch block for the IllegalArgumentException");
+			throw new IllegalArgumentException("Invalid Base64 string provided.", e);
+		}
+
+		Files.write(canonicalTargetPath, decodedBytes);
+
+		try {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"in try of PosixFilePermission rwxrwxrwx");
+			Set<PosixFilePermission> permissions = new HashSet<PosixFilePermission>();
+			permissions.add(PosixFilePermission.OWNER_READ);
+			permissions.add(PosixFilePermission.OWNER_WRITE);
+			permissions.add(PosixFilePermission.OWNER_EXECUTE);
+			permissions.add(PosixFilePermission.GROUP_READ);
+			permissions.add(PosixFilePermission.GROUP_WRITE);
+			permissions.add(PosixFilePermission.GROUP_EXECUTE);
+			permissions.add(PosixFilePermission.OTHERS_READ); 
+			permissions.add(PosixFilePermission.OTHERS_WRITE); 
+			permissions.add(PosixFilePermission.OTHERS_EXECUTE); 
+			Files.setPosixFilePermissions(path.getParent(), permissions);
+			Files.setPosixFilePermissions(path, permissions);
+
+		} catch (UnsupportedOperationException e) {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"in catch of POSIX permissions not supported on this file system.");
+		}
+
+		if (Files.exists(canonicalTargetPath) && Files.isRegularFile(canonicalTargetPath)
+				&& Files.size(canonicalTargetPath) > 0) {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"File successfully created and is not empty at: " + canonicalTargetPath);
+			return "Success";
+		} else {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"File creation failed or the file is empty.");
+			return "Failed";
+		}
+	}
+
+
+
+
+  
+	public static String saveBase64ToFile(String destinationPath) throws IOException, IllegalArgumentException {
+		String thisMethod = "saveBase64ToFile";
+		FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+				UploadDocConstant.METHOD_STARTED);
+
+		Path path = Paths.get(destinationPath);
+
+		Path parentDir = path.getParent();
+		if (parentDir != null && !Files.exists(parentDir)) {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"parentDir is null or file  Files.exists(parentDir)");
+			Files.createDirectories(parentDir);
+
+		}
+
+		String canonicalPath = path.toFile().getCanonicalPath();
+		Path canonicalTargetPath = Paths.get(canonicalPath);
+
+		byte[] decodedBytes;
+		try {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"In try block for byte[] decodedBytes ");
+			decodedBytes = Base64.getDecoder().decode(BASE64DATA);
+		} catch (IllegalArgumentException e) {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"In catch block for the IllegalArgumentException");
+			throw new IllegalArgumentException("Invalid Base64 string provided.", e);
+		}
+
+		Files.write(canonicalTargetPath, decodedBytes);
+
+		try {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"in try of PosixFilePermission rwxrwxrwx");
+			Set<PosixFilePermission> permissions = new HashSet<PosixFilePermission>();
+			permissions.add(PosixFilePermission.OWNER_READ);
+			permissions.add(PosixFilePermission.OWNER_WRITE);
+			permissions.add(PosixFilePermission.OWNER_EXECUTE);
+			permissions.add(PosixFilePermission.GROUP_READ);
+			permissions.add(PosixFilePermission.GROUP_WRITE);
+			permissions.add(PosixFilePermission.GROUP_EXECUTE);
+			permissions.add(PosixFilePermission.OTHERS_READ); 
+			permissions.add(PosixFilePermission.OTHERS_WRITE); 
+			permissions.add(PosixFilePermission.OTHERS_EXECUTE); 
+			Files.setPosixFilePermissions(path.getParent(), permissions);
+			Files.setPosixFilePermissions(path, permissions);
+
+		} catch (UnsupportedOperationException e) {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"in catch of POSIX permissions not supported on this file system.");
+		}
+
+		if (Files.exists(canonicalTargetPath) && Files.isRegularFile(canonicalTargetPath)
+				&& Files.size(canonicalTargetPath) > 0) {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"File successfully created and is not empty at: " + canonicalTargetPath);
+			return "Success";
+		} else {
+			FLogger.info(UploadDocConstant.TIER_NAME, UploadDocConstant.PREVIEW_DOCUMENTSVC, thisMethod,
+					"File creation failed or the file is empty.");
+			return "Failed";
+		}
+	}
