@@ -196,3 +196,135 @@ public static String saveBase64ToFile(String destinationPath)
         return "Failed";
     }
 }
+
+
+import java.io.IOException;
+import java.nio.file.*;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.Base64;
+import java.util.HashSet;
+import java.util.Set;
+
+public class FileUtil {
+
+    private static final String BASE64DATA = "YOUR_BASE64_DATA";
+
+    public static String saveBase64ToFile(String destinationPath)
+            throws IOException, IllegalArgumentException {
+
+        String thisMethod = "saveBase64ToFile";
+
+        FLogger.info(UploadDocConstant.TIER_NAME,
+                UploadDocConstant.PREVIEW_DOCUMENTSVC,
+                thisMethod,
+                UploadDocConstant.METHOD_STARTED);
+
+        Path path = Paths.get(destinationPath);
+
+        // ✅ Create parent directories
+        Path parentDir = path.getParent();
+        if (parentDir != null && !Files.exists(parentDir)) {
+            FLogger.info(UploadDocConstant.TIER_NAME,
+                    UploadDocConstant.PREVIEW_DOCUMENTSVC,
+                    thisMethod,
+                    "Creating parent directories");
+
+            Files.createDirectories(parentDir);
+        }
+
+        // ✅ Canonical path
+        String canonicalPath = path.toFile().getCanonicalPath();
+        Path canonicalTargetPath = Paths.get(canonicalPath);
+
+        // ✅ Decode Base64
+        byte[] decodedBytes;
+        try {
+            FLogger.info(UploadDocConstant.TIER_NAME,
+                    UploadDocConstant.PREVIEW_DOCUMENTSVC,
+                    thisMethod,
+                    "Decoding Base64");
+
+            decodedBytes = Base64.getDecoder().decode(BASE64DATA);
+
+        } catch (IllegalArgumentException e) {
+            FLogger.info(UploadDocConstant.TIER_NAME,
+                    UploadDocConstant.PREVIEW_DOCUMENTSVC,
+                    thisMethod,
+                    "Invalid Base64");
+
+            throw new IllegalArgumentException("Invalid Base64 string provided.", e);
+        }
+
+        // ✅ Write file
+        Files.write(canonicalTargetPath, decodedBytes,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
+
+        // ✅ Set 777 permissions using HashSet
+        try {
+            FLogger.info(UploadDocConstant.TIER_NAME,
+                    UploadDocConstant.PREVIEW_DOCUMENTSVC,
+                    thisMethod,
+                    "Setting 777 permissions from root to leaf");
+
+            Set<PosixFilePermission> permissions = new HashSet<>();
+            permissions.add(PosixFilePermission.OWNER_READ);
+            permissions.add(PosixFilePermission.OWNER_WRITE);
+            permissions.add(PosixFilePermission.OWNER_EXECUTE);
+            permissions.add(PosixFilePermission.GROUP_READ);
+            permissions.add(PosixFilePermission.GROUP_WRITE);
+            permissions.add(PosixFilePermission.GROUP_EXECUTE);
+            permissions.add(PosixFilePermission.OTHERS_READ);
+            permissions.add(PosixFilePermission.OTHERS_WRITE);
+            permissions.add(PosixFilePermission.OTHERS_EXECUTE);
+
+            // 🔥 Loop through each level (/main → journey → ...)
+            Path current = path.getRoot(); // "/"
+
+            for (Path part : path.getParent()) {
+                current = (current == null) ? part : current.resolve(part);
+
+                try {
+                    if (Files.exists(current)) {
+                        Files.setPosixFilePermissions(current, permissions);
+                    }
+                } catch (Exception e) {
+                    FLogger.info(UploadDocConstant.TIER_NAME,
+                            UploadDocConstant.PREVIEW_DOCUMENTSVC,
+                            thisMethod,
+                            "Permission skipped for: " + current);
+                }
+            }
+
+            // ✅ Apply to file
+            Files.setPosixFilePermissions(path, permissions);
+
+        } catch (UnsupportedOperationException e) {
+            FLogger.info(UploadDocConstant.TIER_NAME,
+                    UploadDocConstant.PREVIEW_DOCUMENTSVC,
+                    thisMethod,
+                    "POSIX not supported");
+        }
+
+        // ✅ Final validation
+        if (Files.exists(canonicalTargetPath)
+                && Files.isRegularFile(canonicalTargetPath)
+                && Files.size(canonicalTargetPath) > 0) {
+
+            FLogger.info(UploadDocConstant.TIER_NAME,
+                    UploadDocConstant.PREVIEW_DOCUMENTSVC,
+                    thisMethod,
+                    "File created successfully: " + canonicalTargetPath);
+
+            return "Success";
+        } else {
+
+            FLogger.info(UploadDocConstant.TIER_NAME,
+                    UploadDocConstant.PREVIEW_DOCUMENTSVC,
+                    thisMethod,
+                    "File creation failed");
+
+            return "Failed";
+        }
+    }
+}
