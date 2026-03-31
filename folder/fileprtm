@@ -130,3 +130,69 @@
 			return "Failed";
 		}
 	}
+
+
+====
+public static String saveBase64ToFile(String destinationPath)
+        throws IOException, IllegalArgumentException {
+
+    String thisMethod = "saveBase64ToFile";
+
+    Path path = Paths.get(destinationPath);
+    Path parentDir = path.getParent();
+
+    // ✅ Create directories if not exist
+    if (parentDir != null && !Files.exists(parentDir)) {
+        Files.createDirectories(parentDir);
+    }
+
+    // ✅ Canonical path
+    Path canonicalTargetPath = path.toRealPath(LinkOption.NOFOLLOW_LINKS);
+
+    // ⚠️ If file doesn't exist yet, use normalize instead
+    if (!Files.exists(canonicalTargetPath)) {
+        canonicalTargetPath = path.toAbsolutePath().normalize();
+    }
+
+    // ✅ Decode Base64
+    byte[] decodedBytes;
+    try {
+        decodedBytes = Base64.getDecoder().decode(BASE64DATA);
+    } catch (IllegalArgumentException e) {
+        throw new IllegalArgumentException("Invalid Base64 string provided.", e);
+    }
+
+    // ✅ Write file
+    Files.write(canonicalTargetPath, decodedBytes,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING);
+
+    // ✅ Define 777 permissions
+    Set<PosixFilePermission> permissions =
+            PosixFilePermissions.fromString("rwxrwxrwx");
+
+    try {
+        // ✅ Apply recursively
+        Files.walk(parentDir)
+                .forEach(p -> {
+                    try {
+                        Files.setPosixFilePermissions(p, permissions);
+                    } catch (Exception e) {
+                        System.out.println("Permission failed for: " + p);
+                    }
+                });
+
+    } catch (UnsupportedOperationException e) {
+        System.out.println("POSIX not supported (Windows/NFS issue)");
+    }
+
+    // ✅ Final validation
+    if (Files.exists(canonicalTargetPath)
+            && Files.isRegularFile(canonicalTargetPath)
+            && Files.size(canonicalTargetPath) > 0) {
+
+        return "Success";
+    } else {
+        return "Failed";
+    }
+}
