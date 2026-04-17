@@ -1,0 +1,87 @@
+package com.sbi.yono.document.savingsaccount.edms.task1pdf;
+
+import com.sbi.yono.document.savingsaccount.edms.commonekyc.CommonEkycConstant;
+import com.sbi.yono.document.savingsaccount.edms.constants.Constants;
+import com.sbi.yono.document.savingsaccount.edms.edms.repo.DocumentMasterRepo;
+import com.sbi.yono.document.savingsaccount.edms.entity.CustomerPd;
+import com.sbi.yono.document.savingsaccount.edms.entity.DcmntMstr;
+import com.sbi.yono.document.savingsaccount.edms.entity.EkycPanDetails;
+import com.tcs.techbone.exception.ServiceBusinessException;
+import com.tcs.techbone.exception.ServiceException;
+import com.tcs.techbone.logger.FLogger;
+import net.sf.jasperreports.engine.*;
+import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
+import net.sf.jasperreports.engine.export.JRPdfExporter;
+import net.sf.jasperreports.export.SimpleExporterInput;
+import net.sf.jasperreports.export.SimpleOutputStreamExporterOutput;
+import net.sf.jasperreports.export.SimplePdfExporterConfiguration;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.springframework.stereotype.Service;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.util.*;
+
+@Service
+public class PdfCreation {
+    DocumentMasterRepo documentMasterRepo;
+
+    Map<String, Object> parameters = new HashMap<>();
+
+    public PdfCreation(DocumentMasterRepo documentMasterRepo) {
+        this.documentMasterRepo = documentMasterRepo;
+    }
+
+
+    public String returnValue(String value) {
+
+        if (value == null || value.equals(Constants.NULL_VALUE) || value.isEmpty()
+                || value.trim().equals(CommonEkycConstant.BLANK) || value.equals(CommonEkycConstant.ZERO)) {
+            return "NA";
+        } else {
+            return value;
+        }
+    }
+
+    public String printer(String leadId) throws ServiceBusinessException, ServiceException {
+//        String path = "D:\\Jasper\\task1pdfjasper.jrxml";
+        File path = new File("D:/Jasper/task1pdfjasper.jrxml");
+//        Optional<DcmntMstr> dcmntMstrInfo = documentMasterRepo.findById(leadId);
+        pdfParameterFill();
+        List<String> list = new ArrayList<>();
+        list.add(Constants.PDF);
+        JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(list);
+        JasperReport report;
+        try {
+            report = JasperCompileManager.compileReport(path.getAbsolutePath());
+
+            JasperPrint print = JasperFillManager.fillReport(report, parameters, dataSource);
+            JRPdfExporter exporter = new JRPdfExporter();
+            ByteArrayOutputStream pdfOutputStream = new ByteArrayOutputStream();
+            exporter.setExporterInput(new SimpleExporterInput(print));
+            exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(pdfOutputStream));
+            SimplePdfExporterConfiguration configuration = new SimplePdfExporterConfiguration();
+            configuration.setEncrypted(true);
+            configuration.set128BitKey(false);
+            exporter.setConfiguration(configuration);
+            exporter.exportReport();
+            byte[] pdfByte = pdfOutputStream.toByteArray();
+            String encodeToString = Base64.getEncoder().encodeToString(pdfByte);
+            System.out.println(encodeToString);
+            return encodeToString;
+        } catch (JRException e) {
+            System.out.println(e.getMessage());
+            return null;
+        }
+    }
+
+    public void pdfParameterFill(){
+        parameters.put("Name", "Nihar");
+        parameters.put("EmpId", "2878111");
+        parameters.put("Address", "Thane");
+
+    }
+net.sf.jasperreports.engine.JRException: Error retrieving field value from bean: Name.
+
+
+}
